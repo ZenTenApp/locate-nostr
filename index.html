@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Strict CSP. This app holds no key and signs nothing, but it opens a
+      socket to well over a thousand relays chosen by strangers, and every one
+      of them can return arbitrary text that lands in the DOM. No third-party
+      script may run in the page.
+
+      `connect-src wss:` is the whole point of the app. `https:` is there for
+      NIP-11 documents fetched over HTTP from a relay's own host.
+
+      `script-src` additionally allows the extension schemes, because that is
+      how a NIP-07 signer gets `window.nostr` onto the page — several
+      extensions inject a script element from their own origin, which a bare
+      `'self'` blocks outright, leaving "no extension found" for a user who
+      plainly has one. It admits code from locally installed extensions only:
+      no remote origin can match those schemes, so the protection that matters
+      here — no third-party script from the network — is unchanged.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss: ws: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Sweep every relay on the Nostr network for the kinds a chat client depends on."
+    />
+    <title>Locate</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
