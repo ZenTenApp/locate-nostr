@@ -41,7 +41,6 @@ export interface QueryPanelProps {
   includeDarknet: boolean;
   includeStale: boolean;
   pastedRelays: string;
-  relayCount: number;
   directory: Directory | null;
   breakdown: SelectionBreakdown;
   directoryLoading: boolean;
@@ -88,7 +87,18 @@ export function QueryPanel(props: QueryPanelProps) {
     return () => clearTimeout(timer);
   }, []);
 
-  const identityMode = props.author !== null;
+  /** The relay-list line, as a sentence rather than a ternary in an
+   *  attribute. */
+  const directoryLabel = (): string => {
+    if (props.directoryLoading) return 'finding relays…';
+    if (props.directory === null) return 'no relays found yet';
+    const answered =
+      props.directory.sources.filter((source) => source.error === null).length ||
+      DISCOVERY_RELAYS.length;
+    return `${compactCount(props.breakdown.selected)} relays found by ${answered} relay trackers, ${since(
+      props.directory.fetchedAt / 1000,
+    )}`;
+  };
 
   const askExtension = async () => {
     setExtensionBusy(true);
@@ -177,8 +187,10 @@ export function QueryPanel(props: QueryPanelProps) {
             Stop
           </Button>
         ) : (
-          <Button onClick={props.onStart} disabled={blocked || props.relayCount === 0}>
-            {blocked ? 'Enter an npub first' : `Check ${compactCount(props.relayCount)} relays`}
+          <Button onClick={props.onStart} disabled={blocked || props.breakdown.selected === 0}>
+            {blocked
+              ? 'Enter an npub first'
+              : `Check ${compactCount(props.breakdown.selected)} relays`}
           </Button>
         )}
 
@@ -192,7 +204,7 @@ export function QueryPanel(props: QueryPanelProps) {
           <span className="text-state-error">{props.identityError}</span>
         )}
         {keyError !== null && <span className="text-state-error">{keyError}</span>}
-        {identityMode && props.authorNpub !== null && (
+        {props.author !== null && props.authorNpub !== null && (
           <>
             <span>
               Looking for {shortIdentity(props.authorNpub)}&rsquo;s profile, follows, messages and
@@ -204,7 +216,7 @@ export function QueryPanel(props: QueryPanelProps) {
             </Button>
           </>
         )}
-        {!identityMode && props.identityError === null && (
+        {props.author === null && props.identityError === null && (
           <span>
             Paste an npub above, or use your extension, recovery phrase or SSH key to fill it in.
           </span>
@@ -222,14 +234,7 @@ export function QueryPanel(props: QueryPanelProps) {
               lines: ['Click to see which trackers found them, and why some are left out.'],
             })}
           >
-            {props.directoryLoading
-              ? 'finding relays…'
-              : props.directory
-                ? `${compactCount(props.breakdown.selected)} relays found by ${
-                    props.directory.sources.filter((source) => source.error === null).length ||
-                    DISCOVERY_RELAYS.length
-                  } relay trackers, ${since(props.directory.fetchedAt / 1000)}`
-                : 'no relays found yet'}
+            {directoryLabel()}
           </button>
           {sourcesOpen && (
             <span className="absolute left-0 top-6 z-40 block">

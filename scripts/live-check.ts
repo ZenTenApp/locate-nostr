@@ -6,7 +6,13 @@
  * `config/sweep.ts` is a claim about the real network, and the only way to
  * keep those honest is to re-measure them.
  *
- *   npx vite-node scripts/live-check.ts -- [relayLimit] [npub-or-hex]
+ *   npx vite-node scripts/live-check.ts -- [relayLimit] <npub-or-hex>
+ *
+ * The identity is required, exactly as it is in the app. It used to default to
+ * `null`, which type-checked nowhere (this file was in no tsconfig) and, once
+ * the app dropped its count-everything mode, would have built filters reading
+ * `{"authors":[null]}` — every relay answering nothing, every relay counted as
+ * misbehaving, and a page of measurements that looked real.
  */
 import { fetchDirectory, isStale } from '../src/services/discovery/directory';
 import { parseIdentity } from '../src/services/nostr/identity';
@@ -18,7 +24,10 @@ import { ALL_KINDS, KIND_SPECS } from '../src/config/kinds';
 
 const [limitArg, identityArg] = process.argv.slice(2);
 const relayLimit = Number(limitArg ?? '120');
-const author = identityArg === undefined ? null : parseIdentity(identityArg).hex;
+if (identityArg === undefined) {
+  throw new Error('usage: live-check.ts -- [relayLimit] <npub-or-hex>');
+}
+const author = parseIdentity(identityArg).hex;
 
 const started = Date.now();
 const directory = await fetchDirectory();

@@ -6,9 +6,10 @@
  * runs a fixed number of workers over a shared cursor, which bounds the open
  * socket count while still overlapping the slow relays.
  *
- * Ported from `chat/src/lib/concurrency.ts`, with the addition that a worker
- * count change mid-run is not supported — the sweep rebuilds the runner
- * instead, since a slider drag must not silently apply to half the list.
+ * Ported from `chat/src/lib/concurrency.ts`. The worker count is fixed for the
+ * life of a call: the sweep reads the concurrency setting once when it starts,
+ * so moving the slider mid-run changes nothing until the next run. That is
+ * deliberate — a slider drag must not silently apply to half the list.
  */
 export async function runWithConcurrency<T>(
   items: readonly T[],

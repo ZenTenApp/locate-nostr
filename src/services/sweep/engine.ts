@@ -17,8 +17,6 @@
  * minutes is indistinguishable from a broken one, so each relay is reported
  * the moment it finishes rather than at the end.
  */
-import { verifyEvent } from 'nostr-tools/pure';
-
 import { kindSpec } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import {
@@ -31,8 +29,9 @@ import { runWithConcurrency } from '@/lib/concurrency';
 import { errorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
-import type { CloseReason, RelayEvent, SampleResult } from '@/services/relay/socket';
+import type { CloseReason, SampleResult } from '@/services/relay/socket';
 import { RelaySocket } from '@/services/relay/socket';
+import { verifySignature } from '@/services/relay/verify';
 import { filtersFor, newestOf, splitMatches } from '@/services/sweep/filters';
 import type { KindResult, KindStatus, RelayResult, SweepQuery } from '@/services/sweep/types';
 
@@ -64,19 +63,6 @@ function statusFromRefusal(refusal: CloseReason | null): KindStatus {
 function refusalNote(refusal: CloseReason | null): string | null {
   if (refusal === null || refusal.kind !== 'closed') return null;
   return refusal.message === '' ? null : refusal.message.slice(0, 160);
-}
-
-/**
- * Verify one event's signature, guarding against a malformed event crashing
- * the sweep. `nostr-tools` throws on a bad hex string rather than returning
- * false, and relay content is exactly where a bad hex string comes from.
- */
-function verifySafely(event: RelayEvent): boolean {
-  try {
-    return verifyEvent(event);
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -125,7 +111,7 @@ export function resultFromSample(
           // for a relay. Checked on the newest event per kind only — the one
           // a user acts on — because a signature check costs ~1.5ms and there
           // are six of them per relay across a thousand relays.
-          verified: verifySafely(newestEvent),
+          verified: verifySignature(newestEvent),
         };
 
   return {
@@ -198,7 +184,7 @@ function emptyResult(
 }
 
 /** Every kind on one relay, over a single socket. */
-export async function sweepRelay(
+async function sweepRelay(
   relay: RelayDescriptor,
   query: SweepQuery,
   signal: AbortSignal,

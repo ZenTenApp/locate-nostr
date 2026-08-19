@@ -115,5 +115,5 @@ export function kindSpec(kind: number): KindSpec | undefined {
 
 /** `30315` → `status`, for a header cell or an error line. */
 export function kindLabel(kind: number): string {
-  return SPEC_BY_KIND.get(kind)?.label ?? String(kind);
+  return kindSpec(kind)?.label ?? String(kind);
 }

@@ -3,9 +3,8 @@ import type { ReactNode } from 'react';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
 
 export type BadgeTone = 'neutral' | 'brand' | 'warning' | 'error' | 'success' | 'info';
-type Tone = BadgeTone;
 
-const TONE_CLASS: Record<Tone, string> = {
+const TONE_CLASS: Record<BadgeTone, string> = {
   neutral: 'bg-surface-raised text-ink-secondary',
   brand: 'bg-brand-primaryDim text-ink-primary',
   warning: 'bg-state-warning/20 text-state-warning',
@@ -19,7 +18,7 @@ export function Badge({
   title,
   children,
 }: {
-  tone?: Tone;
+  tone?: BadgeTone;
   /** Explanation, shown in this app's own tooltip rather than the browser's —
    *  a badge is two or three characters and the sentence is the point. */
   title?: string;

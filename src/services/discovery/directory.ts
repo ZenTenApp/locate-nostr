@@ -11,6 +11,7 @@
  * only an empty cache is a hard failure the user has to be told about.
  */
 import {
+  CONNECT_TIMEOUT_MS,
   DISCOVERY_FLOOR_S,
   DISCOVERY_LIMIT,
   DISCOVERY_MAX_PAGES,
@@ -26,7 +27,6 @@ import { mergeDiscoveryEvents, pastedDescriptor } from '@/services/discovery/nip
 import type { RelayDescriptor } from '@/services/discovery/nip66';
 import type { RelayEvent } from '@/services/relay/socket';
 import { RelaySocket } from '@/services/relay/socket';
-import { CONNECT_TIMEOUT_MS } from '@/config/sweep';
 import { parsePastedRelays } from '@/services/relay/url';
 import type { ParsedRelayUrl } from '@/services/relay/url';
 
@@ -160,7 +160,7 @@ export function withPastedRelays(
   const byUrl = new Map(relays.map((relay) => [relay.url, relay]));
   for (const entry of pasted) {
     if (byUrl.has(entry.url)) continue;
-    byUrl.set(entry.url, pastedDescriptor(entry.url, entry.host, entry.network, entry.secure));
+    byUrl.set(entry.url, pastedDescriptor(entry));
   }
   return [...byUrl.values()];
 }
@@ -194,12 +194,43 @@ export interface SelectionBreakdown {
   selected: number;
 }
 
+/** Why a relay is being left out, or `null` when it is not. */
+type Exclusion = 'darknet' | 'stale';
+
+/**
+ * The single exclusion rule.
+ *
+ * Both the list the sweep opens and the breakdown that explains its size are
+ * derived from this one function. They used to be two loops applying the same
+ * two tests in the same order by hand — and the moment those drifted, the
+ * count beside the button would stop matching what the sweep actually opened,
+ * which is precisely the "where did three hundred relays go" confusion the
+ * breakdown exists to answer.
+ */
+function exclusionFor(
+  relay: RelayDescriptor,
+  selection: RelaySelection,
+  now: number,
+): Exclusion | null {
+  if (!selection.includeDarknet && relay.network !== 'clearnet') return 'darknet';
+  if (!selection.includeStale && isStale(relay, now)) return 'stale';
+  return null;
+}
+
+/** Directory plus pasted entries, before any exclusion. */
+function candidates(
+  relays: readonly RelayDescriptor[],
+  selection: RelaySelection,
+): RelayDescriptor[] {
+  return withPastedRelays(relays, parsePastedRelays(selection.pasted));
+}
+
 export function selectionBreakdown(
   relays: readonly RelayDescriptor[],
   selection: RelaySelection,
   now = Date.now(),
 ): SelectionBreakdown {
-  const all = withPastedRelays(relays, parsePastedRelays(selection.pasted));
+  const all = candidates(relays, selection);
   const breakdown: SelectionBreakdown = {
     total: all.length,
     darknet: 0,
@@ -210,41 +241,30 @@ export function selectionBreakdown(
 
   for (const relay of all) {
     if (relay.pasted) breakdown.pasted += 1;
-    // Counted as the reason that actually excluded it, in the order the filter
-    // applies — a stale onion relay is one exclusion, not two.
-    const isDarknet = relay.network !== 'clearnet';
-    if (!selection.includeDarknet && isDarknet) {
-      breakdown.darknet += 1;
-      continue;
-    }
-    if (!selection.includeStale && isStale(relay, now)) {
-      breakdown.stale += 1;
-      continue;
-    }
-    breakdown.selected += 1;
+    // Counted under the reason that actually excluded it, in the order the
+    // filter applies — a stale onion relay is one exclusion, not two.
+    const excluded = exclusionFor(relay, selection, now);
+    if (excluded === null) breakdown.selected += 1;
+    else breakdown[excluded] += 1;
   }
 
   return breakdown;
 }
 
 /**
- * The relays a sweep would actually open, from the directory and the user's
- * selection.
+ * The relays a sweep would actually open.
  *
  * A pure function rather than a store method so the grid can memoise it on the
- * five inputs it truly depends on. Derived from the store's whole state it
- * would recompute on every result flush — four times a second, over thirteen
- * hundred relays, for a list that has not changed since the run began.
+ * inputs it truly depends on. Derived from the store's whole state it would
+ * recompute on every result flush — four times a second, over thirteen hundred
+ * relays, for a list that has not changed since the run began.
  */
 export function selectRelays(
   relays: readonly RelayDescriptor[],
   selection: RelaySelection,
   now = Date.now(),
 ): RelayDescriptor[] {
-  const all = withPastedRelays(relays, parsePastedRelays(selection.pasted));
-  return all.filter((relay) => {
-    if (!selection.includeDarknet && relay.network !== 'clearnet') return false;
-    if (!selection.includeStale && isStale(relay, now)) return false;
-    return true;
-  });
+  return candidates(relays, selection).filter(
+    (relay) => exclusionFor(relay, selection, now) === null,
+  );
 }

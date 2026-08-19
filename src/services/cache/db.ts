@@ -75,24 +75,6 @@ export const directoryCache = {
 export const sweepCache = {
   read: (queryKey: string) => safeGet<SweepSnapshot>(SWEEP_PREFIX + queryKey),
   write: (snapshot: SweepSnapshot) => safeSet(SWEEP_PREFIX + snapshot.queryKey, snapshot),
-  async list(): Promise<string[]> {
-    try {
-      const all = await keys();
-      return all
-        .filter((key): key is string => typeof key === 'string' && key.startsWith(SWEEP_PREFIX))
-        .map((key) => key.slice(SWEEP_PREFIX.length));
-    } catch {
-      return [];
-    }
-  },
-  async clear(queryKey: string): Promise<void> {
-    try {
-      await del(SWEEP_PREFIX + queryKey);
-    } catch {
-      // Nothing to do — the entry is either gone or unreachable.
-    }
-  },
-
   /**
    * Delete results written by an older version of the counting logic.
    *

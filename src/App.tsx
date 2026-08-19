@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { selectionBreakdown, selectRelays } from '@/services/discovery/directory';
+import type { RelayDescriptor } from '@/services/discovery/nip66';
+import { queryKeyFor } from '@/services/sweep/types';
 import { totalsOf } from '@/services/sweep/diff';
 import { DEFAULT_FILTERS, useGridRows } from '@/hooks/use-grid-rows';
 import type { GridFilters } from '@/hooks/use-grid-rows';
@@ -27,6 +29,10 @@ import { TooltipLayer } from '@/components/ui/Tooltip';
  *  every flush. */
 const PAGE_SIZE = 150;
 
+/** Stable empty list, so "no directory yet" does not invalidate the selection
+ *  memo on every render. */
+const EMPTY_RELAYS: readonly RelayDescriptor[] = [];
+
 export function App() {
   const store = useSweepStore();
   const [filters, setFilters] = useState<GridFilters>(DEFAULT_FILTERS);
@@ -41,34 +47,36 @@ export function App() {
 
   // A change of question makes the grid show that question's last answer,
   // rather than leaving the previous question's results under a new heading.
-  // With no identity there is no question, and nothing to restore.
-  const questionKey = `${store.author ?? ''}|${[...store.kinds].sort((a, b) => a - b).join(',')}`;
+  // With no identity there is no question, and nothing to restore. Built with
+  // `queryKeyFor` rather than by hand: this is the cache key, and a second
+  // copy of its format would silently stop matching the stored one.
+  const query = store.currentQuery();
+  const questionKey = query === null ? '' : queryKeyFor(query);
   useEffect(() => {
     void restoreCached();
   }, [questionKey, restoreCached]);
 
-  // Memoised on exactly what the selection depends on. Reading it off the
+  // One memo over the four inputs the selection depends on. Reading it off the
   // store instead would rebuild the list on every result flush — four times a
   // second, over thirteen hundred relays that have not changed since the run
   // started.
+  const selection = useMemo(
+    () => ({
+      includeDarknet: store.includeDarknet,
+      includeStale: store.includeStale,
+      pasted: store.pastedRelays,
+    }),
+    [store.includeDarknet, store.includeStale, store.pastedRelays],
+  );
+  const directoryRelays = store.directory?.relays ?? EMPTY_RELAYS;
   const relays = useMemo(
-    () =>
-      selectRelays(store.directory?.relays ?? [], {
-        includeDarknet: store.includeDarknet,
-        includeStale: store.includeStale,
-        pasted: store.pastedRelays,
-      }),
-    [store.directory, store.includeDarknet, store.includeStale, store.pastedRelays],
+    () => selectRelays(directoryRelays, selection),
+    [directoryRelays, selection],
   );
 
   const breakdown = useMemo(
-    () =>
-      selectionBreakdown(store.directory?.relays ?? [], {
-        includeDarknet: store.includeDarknet,
-        includeStale: store.includeStale,
-        pasted: store.pastedRelays,
-      }),
-    [store.directory, store.includeDarknet, store.includeStale, store.pastedRelays],
+    () => selectionBreakdown(directoryRelays, selection),
+    [directoryRelays, selection],
   );
 
   const { rows, total } = useGridRows(relays, store.results, store.baseline, filters);
@@ -104,7 +112,6 @@ export function App() {
         includeDarknet={store.includeDarknet}
         includeStale={store.includeStale}
         pastedRelays={store.pastedRelays}
-        relayCount={relays.length}
         directory={store.directory}
         breakdown={breakdown}
         directoryLoading={store.directoryStatus === 'loading'}
@@ -160,7 +167,6 @@ export function App() {
       <div className="flex min-h-0 flex-1">
         <ResultGrid
           rows={rows}
-          matched={rows.length}
           limit={limit}
           onShowMore={() => setLimit((current) => current + PAGE_SIZE)}
           selectedUrl={selectedUrl}

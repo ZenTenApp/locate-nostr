@@ -11,6 +11,8 @@
  * `referrer=no-referrer` globally and this repeats it per link, so the relay
  * operator learns an IP visited them and not which pubkey was being looked up.
  */
+import type { ReactNode } from 'react';
+
 import { relayHttpUrl } from '@/services/relay/url';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
 
@@ -18,10 +20,13 @@ export function RelayLink({
   url,
   className = '',
   title,
+  children,
 }: {
   url: string;
   className?: string;
   title?: string;
+  /** Defaults to the URL itself; the grid passes an arrow glyph instead. */
+  children?: ReactNode;
 }) {
   return (
     <a
@@ -37,7 +42,7 @@ export function RelayLink({
       })}
       className={`font-mono underline decoration-dotted underline-offset-2 hover:text-brand-primary ${className}`}
     >
-      {url}
+      {children ?? url}
     </a>
   );
 }

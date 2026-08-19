@@ -9,12 +9,23 @@
  */
 import type { KindSpec } from '@/config/kinds';
 import type { KindDelta } from '@/services/sweep/diff';
-import type { KindResult } from '@/services/sweep/types';
+import type { KindResult, KindStatus } from '@/services/sweep/types';
 import type { TooltipContent, TooltipTone } from '@/stores/tooltip-store';
 
-/** Every non-`ok` outcome, said plainly and without blaming the user. */
+/**
+ * A refusal, as this app names them: every `KindStatus` that is not `ok`, plus
+ * `rejected` — a relay that was reachable and turned the request down, which
+ * arrives as `error` with a reason attached and means something quite
+ * different from a dropped connection.
+ */
+export type RefusalKind = Exclude<KindStatus, 'ok'> | 'rejected';
+
+/** Every non-`ok` outcome, said plainly and without blaming the user.
+ *
+ *  Keyed on the union rather than `string`, so adding a `KindStatus` is a type
+ *  error here instead of a cell that silently renders with no explanation. */
 const STATUS_COPY: Record<
-  string,
+  RefusalKind,
   { title: (label: string) => string; line: string; tone: TooltipTone }
 > = {
   auth: {
@@ -59,6 +70,24 @@ function plural(count: number, word: string): string {
   return `${count.toLocaleString('en-US')} ${word}${count === 1 ? '' : 's'}`;
 }
 
+/**
+ * Is this cell a refusal, and which one?
+ *
+ * The single decision behind both halves of a refusal cell: the glyph the grid
+ * draws and the sentence explaining it. They used to be decided independently
+ * in two files, so a new case would have shown a number under refusal copy, or
+ * a lock with no explanation.
+ *
+ * A refusal that still produced matching events is not a refusal — whatever
+ * the relay said, it answered, and the count wins.
+ */
+export function refusalOf(result: KindResult): RefusalKind | null {
+  if ((result.count ?? 0) > 0) return null;
+  if (result.status === 'ok') return null;
+  // Reachable and said no in its own words, versus the connection dropping.
+  return result.status === 'error' && result.note !== null ? 'rejected' : result.status;
+}
+
 /** The cell has not been reached yet in this run. */
 export function pendingTooltip(spec: KindSpec): TooltipContent {
   return { title: spec.label, lines: ['Not checked yet.'] };
@@ -77,13 +106,10 @@ export function cellTooltip(
   result: KindResult,
   delta: KindDelta | undefined,
 ): TooltipContent {
-  const status =
-    result.status === 'error' && result.note !== null
-      ? STATUS_COPY.rejected
-      : STATUS_COPY[result.status];
+  const refusal = refusalOf(result);
+  const status = refusal === null ? null : STATUS_COPY[refusal];
 
-  // A refusal that still produced events is not a refusal — the count wins.
-  if (status && (result.count ?? 0) === 0) {
+  if (status) {
     return {
       title: status.title(spec.label),
       lines: [status.line, ...(result.note !== null ? [`Relay said: "${result.note}"`] : [])],

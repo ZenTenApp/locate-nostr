@@ -34,6 +34,46 @@ function Stat({
   );
 }
 
+/** The one line in the corner that says what state the page is in. Early
+ *  returns rather than a four-way ternary inside the JSX. */
+function StatusLine({
+  running,
+  progress,
+  percent,
+  resultsFrom,
+  resultsAt,
+  elapsedMs,
+  complete,
+}: {
+  running: boolean;
+  progress: { done: number; total: number };
+  percent: number;
+  resultsFrom: 'cache' | 'live' | null;
+  resultsAt: number | null;
+  elapsedMs: number | null;
+  complete: boolean | null;
+}) {
+  if (running) {
+    return (
+      <span>
+        {progress.done} / {progress.total} · {percent}%
+      </span>
+    );
+  }
+  if (resultsFrom === 'cache' && resultsAt !== null) {
+    return <span className="text-state-warning">saved · {absoluteTime(resultsAt)}</span>;
+  }
+  if (elapsedMs !== null && resultsAt !== null) {
+    return (
+      <span>
+        {complete === false ? 'stopped early' : 'checked'} {absoluteTime(resultsAt)} · took{' '}
+        {duration(elapsedMs)}
+      </span>
+    );
+  }
+  return <span>ready</span>;
+}
+
 export function SummaryBar({
   totals,
   progress,
@@ -95,20 +135,15 @@ export function SummaryBar({
         )}
 
         <div className="ml-auto text-right text-sm text-ink-muted">
-          {running ? (
-            <span>
-              {progress.done} / {progress.total} · {percent}%
-            </span>
-          ) : resultsFrom === 'cache' && resultsAt !== null ? (
-            <span className="text-state-warning">saved · {absoluteTime(resultsAt)}</span>
-          ) : elapsedMs !== null && resultsAt !== null ? (
-            <span>
-              {complete === false ? 'stopped early' : 'checked'} {absoluteTime(resultsAt)} · took{' '}
-              {duration(elapsedMs)}
-            </span>
-          ) : (
-            <span>ready</span>
-          )}
+          <StatusLine
+            running={running}
+            progress={progress}
+            percent={percent}
+            resultsFrom={resultsFrom}
+            resultsAt={resultsAt}
+            elapsedMs={elapsedMs}
+            complete={complete}
+          />
         </div>
       </div>
 

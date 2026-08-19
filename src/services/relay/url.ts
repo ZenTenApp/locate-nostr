@@ -10,9 +10,11 @@
  * Adapted from `chat/src/services/nostr/relay-urls.ts`. It differs in one
  * deliberate way: `ws://` is accepted. That app refuses cleartext because it
  * ships an AUTH challenge over the socket; this one signs nothing and sends no
- * secret, and ~20 of the relays the monitors list are onion or i2p addresses
- * reachable only over `ws://`. Excluding them would be a hole in a tool whose
- * whole claim is completeness.
+ * secret. Several dozen relays the monitors report are plain `ws://` — mostly
+ * bare IPs and self-hosted boxes on odd ports, plus the onion and i2p
+ * addresses — and excluding them would be a hole in a tool whose whole claim
+ * is completeness. Note they are unreachable from an `https:` page anyway, as
+ * mixed content; see the README.
  */
 
 export class InvalidRelayUrlError extends Error {}
@@ -43,9 +45,21 @@ function isPlausibleHost(hostname: string): boolean {
   return hostname.includes('.');
 }
 
+/**
+ * Longest relay URL accepted.
+ *
+ * Every other relay-controlled string is capped — the NIP-11 name at 64, the
+ * software at 40, a refusal message at 160 — because all of them are rendered.
+ * The URL was the exception, and it comes from a stranger's `d` tag and is
+ * rendered in the grid, the detail header and every tooltip. Generous: the
+ * longest real relay in the directory is well under a hundred characters.
+ */
+const MAX_URL_LENGTH = 512;
+
 export function parseRelayUrl(input: string): ParsedRelayUrl {
   const trimmed = input.trim();
   if (trimmed === '') throw new InvalidRelayUrlError('Enter a relay URL');
+  if (trimmed.length > MAX_URL_LENGTH) throw new InvalidRelayUrlError('Relay URL is absurdly long');
 
   let parsed: URL;
   try {
@@ -77,7 +91,7 @@ export function parseRelayUrl(input: string): ParsedRelayUrl {
 
 /** Parse and drop what does not parse. Used on monitor output and on pasted
  *  text, where one malformed entry must not cost the rest of the list. */
-export function parseRelayUrls(candidates: readonly unknown[]): ParsedRelayUrl[] {
+function parseRelayUrls(candidates: readonly unknown[]): ParsedRelayUrl[] {
   const byUrl = new Map<string, ParsedRelayUrl>();
   for (const candidate of candidates) {
     if (typeof candidate !== 'string') continue;

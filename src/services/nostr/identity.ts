@@ -19,7 +19,9 @@ export interface Identity {
   hints: string[];
 }
 
-const HEX_64 = /^[0-9a-f]{64}$/i;
+/** A hex pubkey: 32 bytes, either case. Exported because the NIP-07 path has
+ *  to make the same judgement about what an extension hands back. */
+export const HEX_64 = /^[0-9a-f]{64}$/i;
 
 export function parseIdentity(input: string): Identity {
   const trimmed = input.trim().replace(/^nostr:/i, '');

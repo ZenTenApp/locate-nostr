@@ -61,9 +61,9 @@ export const DISCOVERY_TIMEOUT_MS = 20_000;
  *
  * Chrome caps WebSocket connections at 255 per host but has no global cap;
  * the real ceiling is the machine's file descriptors and the CPU cost of a
- * thousand TLS handshakes. Measured: 60 relays at 20 sockets took 27s, so
- * ~1300 relays at 48 lands near three minutes, and results stream in from the
- * first second.
+ * thousand TLS handshakes. Measured over the full directory at this setting:
+ * 1,353 relays in 79s from Node, 1,339 in 3m54s from Chrome, which queues the
+ * handshakes. Results stream in from the first second either way.
  */
 export const SWEEP_CONCURRENCY = 48;
 

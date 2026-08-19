@@ -81,8 +81,8 @@ async function throughWorker<T>(work: Promise<T>): Promise<T> {
   }
 }
 
-/** An encrypted OpenSSH Ed25519 key plus its passphrase → the identity it
- *  roots. Rejects unencrypted keys before the passphrase step. */
+/** An OpenSSH Ed25519 key → the identity it roots. `passphrase` is ignored
+ *  for a key that has none; see {@link inspectSshKey}. */
 export function pubkeyFromSshKey(pem: string, passphrase: string): Promise<PublicIdentity> {
   logger.key('Deriving from SSH key');
   return throughWorker(keyWorker.request('ssh-pubkey', { pem, passphrase }));

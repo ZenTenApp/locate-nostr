@@ -19,6 +19,7 @@
 import { KeyError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { publicIdentity } from '@/services/crypto/nip06';
+import { HEX_64 } from '@/services/nostr/identity';
 import type { PublicIdentity } from '@/services/crypto/nip06';
 
 /** The sliver of NIP-07 this app uses. Signing is deliberately not declared —
@@ -46,10 +47,10 @@ const DETECT_INTERVAL_MS = 100;
  */
 const APPROVAL_TIMEOUT_MS = 90_000;
 
-const HEX_64 = /^[0-9a-f]{64}$/i;
-
-/** Is an extension present *right now*? Drives whether the button is offered
- *  at all, so it does not wait. */
+/** Is an extension present *right now*? Used to word the button's tooltip, so
+ *  it answers immediately rather than waiting for a late injection. The button
+ *  itself is always offered — pressing it is how a late-injecting extension
+ *  gets found. */
 export function hasNostrExtension(): boolean {
   return typeof window !== 'undefined' && typeof window.nostr?.getPublicKey === 'function';
 }

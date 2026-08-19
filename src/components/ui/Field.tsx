@@ -88,7 +88,7 @@ export function Select({ className = '', ...rest }: ComponentProps<'select'>) {
 
 /** Native checkbox, sized to the fields. Native rather than a styled div so
  *  keyboard and screen-reader behaviour comes free. */
-export function Checkbox({ className = '', ...rest }: ComponentProps<'input'>) {
+function Checkbox({ className = '', ...rest }: ComponentProps<'input'>) {
   return (
     <input
       type="checkbox"

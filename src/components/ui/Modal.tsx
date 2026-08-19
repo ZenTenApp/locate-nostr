@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/Button';
 
@@ -22,6 +22,8 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -30,6 +32,16 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Move focus into the dialog on open. Without this a keyboard user is still
+  // on the page behind it — tabbing walks the grid rather than the fields, and
+  // a screen reader never announces that a dialog appeared.
+  useEffect(() => {
+    const focusable = dialogRef.current?.querySelector<HTMLElement>(
+      'textarea, input, button, [href]',
+    );
+    focusable?.focus();
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-lg"
@@ -37,6 +49,7 @@ export function Modal({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

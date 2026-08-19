@@ -1,0 +1,20 @@
+{
+  /*
+   * The command-line scripts.
+   *
+   * Their own project because they are the one place Node and browser code
+   * meet: they import `node:fs` and `process`, which must never resolve inside
+   * `src`, and they import deep into `src`, which needs the `@/` alias and the
+   * DOM lib (`WebSocket`, `performance`). Left out of every project entirely —
+   * as they were — they type-check nowhere, and `scripts/live-check.ts` sat
+   * passing `author: null` into a `SweepQuery.author: string` for as long as
+   * that was true.
+   */
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo",
+    "types": ["node", "vite/client"],
+    "noEmit": true
+  },
+  "include": ["scripts", "src"]
+}

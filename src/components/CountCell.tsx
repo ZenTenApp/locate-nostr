@@ -17,7 +17,13 @@ import { compactCount } from '@/lib/format';
 import type { KindDelta } from '@/services/sweep/diff';
 import type { KindResult } from '@/services/sweep/types';
 import { tooltipText } from '@/stores/tooltip-store';
-import { cellTooltip, pendingTooltip, unreachableTooltip } from '@/components/cell-tooltip';
+import {
+  cellTooltip,
+  pendingTooltip,
+  refusalOf,
+  unreachableTooltip,
+} from '@/components/cell-tooltip';
+import type { RefusalKind } from '@/components/cell-tooltip';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
 
 /** Fill by order of magnitude. Boundaries are decades because relay holdings
@@ -32,13 +38,15 @@ function fillFor(count: number): string {
 
 /** Refusals and failures render as a glyph rather than a number: a lock is not
  *  a zero, and showing one as the other is the mistake this whole app exists
- *  to avoid. What each glyph means is in the tooltip. */
-const STATUS_GLYPH: Record<string, { glyph: string; tone: string }> = {
+ *  to avoid. Which cases are refusals is decided by `refusalOf`, and what each
+ *  glyph means is in the tooltip. */
+const STATUS_GLYPH: Record<RefusalKind, { glyph: string; tone: string }> = {
   auth: { glyph: '🔒', tone: 'text-state-warning' },
   payment: { glyph: '💸', tone: 'text-state-warning' },
   restricted: { glyph: '⊘', tone: 'text-state-warning' },
   timeout: { glyph: '⏱', tone: 'text-ink-muted' },
   error: { glyph: '!', tone: 'text-state-error' },
+  rejected: { glyph: '⊗', tone: 'text-state-error' },
 };
 
 export function CountCell({
@@ -82,9 +90,9 @@ export function CountCell({
   const content = cellTooltip(spec, result, delta);
   const handlers = tooltipHandlers(content);
   const label = tooltipText(content);
-  const status = STATUS_GLYPH[result.status];
-
-  if (status && (result.count ?? 0) === 0) {
+  const refusal = refusalOf(result);
+  if (refusal !== null) {
+    const status = STATUS_GLYPH[refusal];
     return (
       <div {...handlers} aria-label={label} className={`text-center text-sm ${status.tone}`}>
         {status.glyph}

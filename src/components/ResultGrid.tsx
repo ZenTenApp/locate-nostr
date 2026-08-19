@@ -7,18 +7,19 @@
  * "show more" is a tenth of the code and honest about what it is doing —
  * `visible of matched` is always on screen.
  */
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { KIND_SPECS } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import { compactCount, duration } from '@/lib/format';
-import { relayHost, relayHttpUrl } from '@/services/relay/url';
+import { relayHost } from '@/services/relay/url';
 import type { RelayChange } from '@/services/sweep/diff';
 import type { GridRow } from '@/hooks/use-grid-rows';
 import { CountCell } from '@/components/CountCell';
 import { Badge } from '@/components/ui/Badge';
 import type { BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { RelayLink } from '@/components/ui/RelayLink';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
 
 /** Column widths, in one place: the header and every row build their grid
@@ -103,18 +104,15 @@ function RelayLabel({ row }: { row: GridRow }) {
       {/* Opening the relay is its own control, and it stops the row's click so
           one gesture does one thing. This is also why the row is a div with a
           button role rather than a real `<button>`: an `<a>` nested inside a
-          button is invalid HTML and behaves unpredictably across browsers. */}
-      <a
-        href={relayHttpUrl(relay.url)}
-        target="_blank"
-        rel="noreferrer noopener"
-        onClick={(event) => event.stopPropagation()}
-        {...tooltipHandlers({ title: 'Open this relay', lines: [relayHttpUrl(relay.url)] })}
-        aria-label={`Open ${relay.url}`}
-        className="shrink-0 text-xs text-ink-muted opacity-0 transition hover:text-brand-primary group-hover:opacity-100"
+          button is invalid HTML and behaves unpredictably across browsers.
+          `RelayLink` owns the referrer handling — reproducing it here meant
+          that reasoning had to be remembered in two files. */}
+      <RelayLink
+        url={relay.url}
+        className="shrink-0 text-xs text-ink-muted opacity-0 transition group-hover:opacity-100"
       >
         ↗
-      </a>
+      </RelayLink>
       {relay.requiresAuth === true && (
         <Badge tone="warning" title="Trackers report that this relay wants you signed in">
           sign-in
@@ -138,11 +136,14 @@ function RelayLabel({ row }: { row: GridRow }) {
 const Row = memo(function Row({
   row,
   kinds,
+  template,
   selected,
   onSelect,
 }: {
   row: GridRow;
   kinds: readonly KindSpec[];
+  /** Built once by the grid rather than per row — 150 identical strings. */
+  template: string;
   selected: boolean;
   onSelect: (url: string) => void;
 }) {
@@ -162,7 +163,7 @@ const Row = memo(function Row({
           onSelect(row.relay.url);
         }
       }}
-      style={{ gridTemplateColumns: templateFor(kinds) }}
+      style={{ gridTemplateColumns: template }}
       className={`grid-row group w-full cursor-pointer gap-sm border-b border-surface-border/60 px-md py-1.5 text-left transition hover:bg-surface-card focus:outline focus:outline-1 focus:outline-brand-primary ${
         selected ? 'bg-surface-card' : ''
       }`}
@@ -193,7 +194,6 @@ const Row = memo(function Row({
 
 export function ResultGrid({
   rows,
-  matched,
   limit,
   onShowMore,
   selectedUrl,
@@ -202,7 +202,6 @@ export function ResultGrid({
   elapsedMs,
 }: {
   rows: GridRow[];
-  matched: number;
   limit: number;
   onShowMore: () => void;
   selectedUrl: string | null;
@@ -211,13 +210,17 @@ export function ResultGrid({
   kinds: number[];
   elapsedMs: number | null;
 }) {
-  const specs = KIND_SPECS.filter((spec) => kinds.includes(spec.kind));
+  // Memoised because it is passed to the memoised `Row`: a fresh array per
+  // render made every row's props compare unequal, so all 150 visible rows
+  // re-rendered whenever the selection or the page size changed.
+  const specs = useMemo(() => KIND_SPECS.filter((spec) => kinds.includes(spec.kind)), [kinds]);
+  const template = useMemo(() => templateFor(specs), [specs]);
   const shown = rows.slice(0, limit);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
-        style={{ gridTemplateColumns: templateFor(specs) }}
+        style={{ gridTemplateColumns: template }}
         className="grid-row sticky top-0 z-10 gap-sm border-b border-surface-border bg-surface-panel px-md py-sm text-xs uppercase tracking-wide text-ink-muted"
       >
         <span>relay</span>
@@ -259,6 +262,7 @@ export function ResultGrid({
             key={row.relay.url}
             row={row}
             kinds={specs}
+            template={template}
             selected={row.relay.url === selectedUrl}
             onSelect={onSelect}
           />
@@ -273,7 +277,7 @@ export function ResultGrid({
         {rows.length > shown.length && (
           <div className="flex items-center justify-center gap-md p-lg">
             <span className="text-sm text-ink-muted">
-              {shown.length} of {matched} matching relays
+              {shown.length} of {rows.length} matching relays
             </span>
             <Button variant="secondary" onClick={onShowMore}>
               Show more
@@ -283,7 +287,7 @@ export function ResultGrid({
 
         {elapsedMs !== null && rows.length > 0 && rows.length <= shown.length && (
           <p className="p-lg text-center text-sm text-ink-muted">
-            {matched} relays · checked in {duration(elapsedMs)}
+            {rows.length} relays · checked in {duration(elapsedMs)}
           </p>
         )}
       </div>

@@ -23,12 +23,9 @@
       sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
-  }
-
-  /* The result grid is the only scroll container that matters; a rubber-band
-     bounce on the page behind it makes a sweep in progress look like a
-     rendering fault. */
-  body {
+    /* The result grid is the only scroll container that matters; a rubber-band
+       bounce on the page behind it makes a run in progress look like a
+       rendering fault. */
     overscroll-behavior: none;
   }
 }
@@ -37,7 +34,7 @@
   /* Masks a field without making it `type="password"`. A password field is the
      one thing browsers and managers offer to save and replay, and every secret
      this app takes exists for one derivation and is then wiped — see
-     `MaskedInput`. */
+     `SecretInput` in `components/ui/Field.tsx`. */
   .mask-chars {
     -webkit-text-security: disc;
   }

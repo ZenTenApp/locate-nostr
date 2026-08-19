@@ -12,13 +12,12 @@
  * is trying to establish. It is labelled as a fresh read for that reason, and
  * the count it returns can legitimately differ from the one in the grid.
  */
-import { verifyEvent } from 'nostr-tools/pure';
-
 import type { KindSpec } from '@/config/kinds';
 import { CONNECT_TIMEOUT_MS, QUERY_TIMEOUT_MS } from '@/config/sweep';
 import { errorMessage } from '@/lib/errors';
 import type { CloseReason, RelayEvent } from '@/services/relay/socket';
 import { RelaySocket } from '@/services/relay/socket';
+import { verifySignature } from '@/services/relay/verify';
 import { filtersFor, splitMatches } from '@/services/sweep/filters';
 
 /** One event as fetched, with the checks this app can make about it. */
@@ -40,16 +39,6 @@ export interface RawEventsResult {
   /** True when the relay signalled it had sent everything it had. */
   complete: boolean;
   error: string | null;
-}
-
-function verifySafely(event: RelayEvent): boolean {
-  try {
-    return verifyEvent(event);
-  } catch {
-    // `nostr-tools` throws rather than returning false on malformed hex, and
-    // malformed hex is exactly what an untrusted relay might send.
-    return false;
-  }
 }
 
 /**
@@ -77,7 +66,7 @@ export async function fetchRelayEvents(
     return {
       events: sample.events.map((event) => ({
         event,
-        verified: verifySafely(event),
+        verified: verifySignature(event),
         offFilter: !matchedIds.has(event.id),
       })),
       refusal: sample.refusal,

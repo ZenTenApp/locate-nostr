@@ -4,11 +4,13 @@
  * Modelled as a discriminated union rather than the reference's optional
  * fields (`kdfSalt?`, consumed via `kdfSalt!`): under
  * `exactOptionalPropertyTypes` the optional form is hostile, and the union
- * makes "an unencrypted key is not acceptable" a typed narrowing instead of a
- * runtime string check.
+ * turns "does this key need a passphrase" into a typed narrowing instead of a
+ * runtime string check. Both arms are usable here — unlike in `chat`, which
+ * refuses the unencrypted one; see `services/ssh/index.ts`.
  */
 
-/** A key whose private block is stored in the clear. Rejected at login. */
+/** A key whose private block is stored in the clear — no passphrase needed,
+ *  and no bcrypt wait. */
 export interface UnencryptedParsedKey {
   kdfName: 'none';
   cipherName: string;

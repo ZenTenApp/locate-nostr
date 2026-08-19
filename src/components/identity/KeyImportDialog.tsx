@@ -31,6 +31,20 @@ import { Modal } from '@/components/ui/Modal';
 
 export type KeyImportMode = Extract<IdentitySource, 'seed' | 'ssh'>;
 
+/** What the pasted key says about a passphrase, or `unknown` before one
+ *  parses. */
+type PassphraseNeed = 'unknown' | 'required' | 'none';
+
+/** Placeholder per mode and per what the key turned out to need — a lookup
+ *  rather than a nested ternary inside the attribute. */
+const PASSPHRASE_PLACEHOLDER: Record<KeyImportMode | PassphraseNeed, string> = {
+  seed: 'leave empty unless you set one',
+  ssh: 'only if your key has one',
+  unknown: 'only if your key has one',
+  required: 'required for this key',
+  none: 'not needed — this key is unencrypted',
+};
+
 /** Below this the estimate is noise and the spinner alone reads as
  *  responsive. */
 const ESTIMATE_FLOOR_SECONDS = 3;
@@ -150,26 +164,18 @@ export function KeyImportDialog({
   };
 
   const copy = COPY[mode];
-  // For an SSH key the paste has to parse first, and an encrypted one needs
-  // its passphrase before the button does anything useful. Checked here rather
-  // than left to fail in the worker: `bcrypt_pbkdf` rejects an empty
-  // passphrase as invalid parameters, which is indistinguishable from a
-  // malformed key and used to be reported as one.
   /**
    * Three states, not two. Until a key parses, whether it needs a passphrase
    * is **unknown** — and saying "required" for unknown told users with an
-   * unencrypted key that they had to produce a passphrase that does not
-   * exist. The field stays usable while unknown; it is only disabled once a
-   * key has actually said it has no passphrase.
+   * unencrypted key to produce a passphrase that does not exist. The field
+   * stays usable while unknown; it is disabled only once a key has actually
+   * said it has none.
+   *
+   * `keyInfo` is set only in ssh mode, so seed mode falls out as unknown
+   * without a branch of its own.
    */
-  const passphraseNeed: 'unknown' | 'required' | 'none' =
-    mode === 'seed'
-      ? 'unknown'
-      : keyInfo === null
-        ? 'unknown'
-        : keyInfo.encrypted
-          ? 'required'
-          : 'none';
+  const passphraseNeed: PassphraseNeed =
+    keyInfo === null ? 'unknown' : keyInfo.encrypted ? 'required' : 'none';
   const needsPassphrase = passphraseNeed !== 'none';
   /**
    * Only two things stop the button: nothing pasted, and work already running.
@@ -209,13 +215,7 @@ export function KeyImportDialog({
               if (event.key === 'Enter' && !blocked) void submit();
             }}
             placeholder={
-              mode === 'seed'
-                ? 'leave empty unless you set one'
-                : passphraseNeed === 'required'
-                  ? 'required for this key'
-                  : passphraseNeed === 'none'
-                    ? 'not needed — this key is unencrypted'
-                    : 'only if your key has one'
+              mode === 'seed' ? PASSPHRASE_PLACEHOLDER.seed : PASSPHRASE_PLACEHOLDER[passphraseNeed]
             }
             aria-label="Passphrase"
           />

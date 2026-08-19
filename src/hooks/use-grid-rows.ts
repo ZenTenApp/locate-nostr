@@ -95,13 +95,20 @@ function compare(a: GridRow, b: GridRow, sort: SortKey): number {
   return left - right;
 }
 
-export function useGridRows(
+/**
+ * The rows the grid draws, as a pure function.
+ *
+ * Separate from the hook so it can be tested without a renderer: this is the
+ * whole of what the user sees — which relays appear, in what order — and it is
+ * ordinary data in, ordinary data out.
+ */
+export function buildRows(
   relays: readonly RelayDescriptor[],
   results: Map<string, RelayResult>,
   baseline: Map<string, RelayResult>,
   filters: GridFilters,
 ): { rows: GridRow[]; total: number } {
-  return useMemo(() => {
+  {
     const all: GridRow[] = relays.map((relay) => {
       const result = results.get(relay.url);
       return {
@@ -130,5 +137,19 @@ export function useGridRows(
     });
 
     return { rows, total: all.length };
-  }, [relays, results, baseline, filters]);
+  }
+}
+
+/** {@link buildRows}, memoised. It runs on every keystroke in the filter box
+ *  over thirteen hundred rows. */
+export function useGridRows(
+  relays: readonly RelayDescriptor[],
+  results: Map<string, RelayResult>,
+  baseline: Map<string, RelayResult>,
+  filters: GridFilters,
+): { rows: GridRow[]; total: number } {
+  return useMemo(
+    () => buildRows(relays, results, baseline, filters),
+    [relays, results, baseline, filters],
+  );
 }

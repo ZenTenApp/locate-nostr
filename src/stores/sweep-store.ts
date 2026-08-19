@@ -95,13 +95,7 @@ interface SweepState {
     patch: Partial<
       Pick<
         SweepState,
-        | 'author'
-        | 'kinds'
-        | 'sampleLimit'
-        | 'concurrency'
-        | 'includeDarknet'
-        | 'includeStale'
-        | 'pastedRelays'
+        'kinds' | 'sampleLimit' | 'concurrency' | 'includeDarknet' | 'includeStale' | 'pastedRelays'
       >
     >,
   ) => void;
@@ -340,10 +334,14 @@ export const useSweepStore = create<SweepState>((set, get) => ({
       pending = [];
       pendingProgress = null;
       set((current) => {
-        if (batch.length === 0) return progress === null ? {} : { progress };
-        const results = new Map(current.results);
-        for (const result of batch) results.set(result.url, result);
-        return progress === null ? { results } : { results, progress };
+        const patch: Partial<SweepState> = {};
+        if (progress !== null) patch.progress = progress;
+        if (batch.length > 0) {
+          const results = new Map(current.results);
+          for (const result of batch) results.set(result.url, result);
+          patch.results = results;
+        }
+        return patch;
       });
     };
     flushTimer = setInterval(flush, RESULT_FLUSH_MS);

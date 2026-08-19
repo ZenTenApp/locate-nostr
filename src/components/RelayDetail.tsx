@@ -10,7 +10,7 @@
  */
 import { useState } from 'react';
 
-import { KIND_SPECS } from '@/config/kinds';
+import { kindLabel, kindSpec } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import { compactCount, since } from '@/lib/format';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
@@ -35,15 +35,14 @@ function KindLine({
   /** Absent when there is no identity to re-query with. */
   onViewRaw: ((spec: KindSpec) => void) | null;
 }) {
-  const spec = KIND_SPECS.find((entry) => entry.kind === result.kind);
+  // The keyed lookup, not a scan: `kindSpec` exists for exactly this.
+  const spec = kindSpec(result.kind);
   const count = result.count;
 
   return (
     <div className="border-b border-surface-border/60 py-sm">
       <div className="flex items-baseline gap-sm">
-        <span className="w-24 shrink-0 text-base text-ink-primary">
-          {spec?.label ?? result.kind}
-        </span>
+        <span className="w-24 shrink-0 text-base text-ink-primary">{kindLabel(result.kind)}</span>
         <span className="font-mono text-base text-ink-primary">
           {count === null ? '—' : `${result.approx ? '≥' : ''}${compactCount(count)}`}
         </span>

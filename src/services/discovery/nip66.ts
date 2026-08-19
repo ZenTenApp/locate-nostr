@@ -14,6 +14,7 @@
  */
 import type { RelayEvent } from '@/services/relay/socket';
 import { parseRelayUrl } from '@/services/relay/url';
+import type { ParsedRelayUrl } from '@/services/relay/url';
 
 export interface RelayDescriptor {
   /** Canonical URL — the directory's key. */
@@ -49,7 +50,21 @@ function tagValues(event: RelayEvent, name: string): string[] {
 }
 
 function firstTag(event: RelayEvent, name: string): string | null {
-  return tagValues(event, name)[0] ?? null;
+  // Not `tagValues(...)[0]`: this runs five times per event across forty
+  // thousand discovery events on every cold start, and building the whole
+  // array to read its head is the bulk of that.
+  for (const tag of event.tags) {
+    if (tag[0] === name && tag[1] !== undefined) return tag[1];
+  }
+  return null;
+}
+
+/** `R` tags say what a relay demands: `auth` requires it, `!auth` does not,
+ *  and absent means no monitor said either way. One rule, two callers. */
+function requirement(requirements: ReadonlySet<string>, name: string): boolean | null {
+  if (requirements.has(name)) return true;
+  if (requirements.has(`!${name}`)) return false;
+  return null;
 }
 
 /** NIP-11 fields the grid shows. The document is relay-authored text, so
@@ -108,13 +123,8 @@ export function readDiscoveryEvent(event: RelayEvent): RelayDescriptor | null {
     network,
     secure: parsed.secure,
     nips: [...new Set(nips)].sort((a, b) => a - b),
-    // `!auth` means "does not require it"; a bare `auth` means it does.
-    requiresAuth: requirements.has('auth') ? true : requirements.has('!auth') ? false : null,
-    requiresPayment: requirements.has('payment')
-      ? true
-      : requirements.has('!payment')
-        ? false
-        : null,
+    requiresAuth: requirement(requirements, 'auth'),
+    requiresPayment: requirement(requirements, 'payment'),
     rttOpenMs: Number.isFinite(rtt) ? rtt : null,
     name: nip11.name,
     software: nip11.software ?? firstTag(event, 's'),
@@ -134,7 +144,10 @@ export function readDiscoveryEvent(event: RelayEvent): RelayDescriptor | null {
  * than absent from the relay.
  */
 export function mergeDiscoveryEvents(events: readonly RelayEvent[]): RelayDescriptor[] {
-  const byUrl = new Map<string, { descriptor: RelayDescriptor; monitors: Set<string> }>();
+  const byUrl = new Map<
+    string,
+    { descriptor: RelayDescriptor; monitors: Set<string>; nips: Set<number> }
+  >();
 
   for (const event of events) {
     const descriptor = readDiscoveryEvent(event);
@@ -142,41 +155,40 @@ export function mergeDiscoveryEvents(events: readonly RelayEvent[]): RelayDescri
 
     const existing = byUrl.get(descriptor.url);
     if (!existing) {
-      byUrl.set(descriptor.url, { descriptor, monitors: new Set([event.pubkey]) });
+      byUrl.set(descriptor.url, {
+        descriptor,
+        monitors: new Set([event.pubkey]),
+        nips: new Set(descriptor.nips),
+      });
       continue;
     }
 
+    // Accumulated in sets and sorted once per relay at the end. Sorting and
+    // re-spreading per event meant tens of thousands of throwaway arrays on
+    // every cold start, and a `monitorCount` written here only to be
+    // recomputed below.
     existing.monitors.add(event.pubkey);
-    const nips = new Set([...existing.descriptor.nips, ...descriptor.nips]);
+    for (const nip of descriptor.nips) existing.nips.add(nip);
     if (descriptor.monitoredAt > existing.descriptor.monitoredAt) {
       existing.descriptor = descriptor;
     }
-    existing.descriptor = {
-      ...existing.descriptor,
-      nips: [...nips].sort((a, b) => a - b),
-      monitorCount: existing.monitors.size,
-    };
   }
 
   return [...byUrl.values()].map((entry) => ({
     ...entry.descriptor,
+    nips: [...entry.nips].sort((a, b) => a - b),
     monitorCount: entry.monitors.size,
   }));
 }
 
 /** A relay the user pasted, with the metadata a monitor would have supplied
  *  left explicitly unknown rather than guessed. */
-export function pastedDescriptor(
-  url: string,
-  host: string,
-  parsed: RelayDescriptor['network'],
-  secure: boolean,
-): RelayDescriptor {
+export function pastedDescriptor(parsed: ParsedRelayUrl): RelayDescriptor {
   return {
-    url,
-    host,
-    network: parsed,
-    secure,
+    url: parsed.url,
+    host: parsed.host,
+    network: parsed.network,
+    secure: parsed.secure,
     nips: [],
     requiresAuth: null,
     requiresPayment: null,
