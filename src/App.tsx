@@ -21,6 +21,7 @@ import { FilterBar } from '@/components/FilterBar';
 import { QueryPanel } from '@/components/QueryPanel';
 import { RelayDetail } from '@/components/RelayDetail';
 import { ResultGrid } from '@/components/ResultGrid';
+import { gridStatusFor } from '@/components/grid-status';
 import { SummaryBar } from '@/components/SummaryBar';
 import { TooltipLayer } from '@/components/ui/Tooltip';
 
@@ -81,6 +82,14 @@ export function App() {
 
   const { rows, total } = useGridRows(relays, store.results, store.baseline, filters);
   const totals = useMemo(() => totalsOf([...store.results.values()]), [store.results]);
+
+  // An empty grid means something different depending on what is in flight;
+  // see `gridStatusFor`.
+  const gridStatus = gridStatusFor({
+    relayCount: relays.length,
+    directoryLoading: store.directoryStatus === 'loading',
+    running: store.status === 'running',
+  });
 
   const selected = selectedUrl === null ? null : relays.find((relay) => relay.url === selectedUrl);
   const elapsedMs =
@@ -173,6 +182,7 @@ export function App() {
           onSelect={(url) => setSelectedUrl((current) => (current === url ? null : url))}
           kinds={store.kinds}
           elapsedMs={elapsedMs}
+          status={gridStatus}
         />
         {selected && (
           <RelayDetail

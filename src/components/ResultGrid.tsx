@@ -20,7 +20,39 @@ import { Badge } from '@/components/ui/Badge';
 import type { BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { RelayLink } from '@/components/ui/RelayLink';
+import { Spinner } from '@/components/ui/Spinner';
+import type { GridStatus } from '@/components/grid-status';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
+
+const BUSY_MESSAGE: Record<'finding-relays' | 'checking', string> = {
+  'finding-relays': 'Finding relays — asking the trackers which ones exist…',
+  checking: 'Checking relays — nothing matches these filters yet…',
+};
+
+function EmptyState({ status }: { status: GridStatus }) {
+  if (status === 'idle') {
+    return (
+      <p className="px-md py-xl text-center text-base text-ink-muted">
+        No relay matches these filters.
+      </p>
+    );
+  }
+
+  if (status === 'no-relays') {
+    return (
+      <p className="px-md py-xl text-center text-base text-ink-muted">
+        No relays to check — no tracker answered, and nothing was cached. Try Refresh.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-md px-md py-xl text-base text-ink-muted">
+      <Spinner />
+      <span>{BUSY_MESSAGE[status]}</span>
+    </div>
+  );
+}
 
 /** Column widths, in one place: the header and every row build their grid
  *  template from this, so they cannot drift apart. */
@@ -200,6 +232,7 @@ export function ResultGrid({
   onSelect,
   kinds,
   elapsedMs,
+  status,
 }: {
   rows: GridRow[];
   limit: number;
@@ -209,6 +242,8 @@ export function ResultGrid({
   /** The kinds actually queried, which is what the columns are. */
   kinds: number[];
   elapsedMs: number | null;
+  /** Why an empty grid is empty. */
+  status: GridStatus;
 }) {
   // Memoised because it is passed to the memoised `Row`: a fresh array per
   // render made every row's props compare unequal, so all 150 visible rows
@@ -268,11 +303,7 @@ export function ResultGrid({
           />
         ))}
 
-        {rows.length === 0 && (
-          <p className="px-md py-xl text-center text-base text-ink-muted">
-            No relay matches these filters.
-          </p>
-        )}
+        {rows.length === 0 && <EmptyState status={status} />}
 
         {rows.length > shown.length && (
           <div className="flex items-center justify-center gap-md p-lg">
