@@ -30,7 +30,7 @@ import { errorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
 import type { CloseReason, SampleResult } from '@/services/relay/socket';
-import { RelaySocket } from '@/services/relay/socket';
+import { MAX_RELAY_MESSAGE, RelaySocket } from '@/services/relay/socket';
 import { verifySignature } from '@/services/relay/verify';
 import { filtersFor, newestOf, splitMatches } from '@/services/sweep/filters';
 import type { KindResult, KindStatus, RelayResult, SweepQuery } from '@/services/sweep/types';
@@ -62,7 +62,7 @@ function statusFromRefusal(refusal: CloseReason | null): KindStatus {
 
 function refusalNote(refusal: CloseReason | null): string | null {
   if (refusal === null || refusal.kind !== 'closed') return null;
-  return refusal.message === '' ? null : refusal.message.slice(0, 160);
+  return refusal.message === '' ? null : refusal.message.slice(0, MAX_RELAY_MESSAGE);
 }
 
 /**
@@ -83,21 +83,35 @@ export function resultFromSample(
   // what arrived rather than what exists.
   const approx = sample.events.length >= query.sampleLimit || !sample.complete;
 
+  /**
+   * No number, for either of the two reasons there can be one.
+   *
+   * A count of `null` is this file's whole point rendered as data: the cell
+   * draws `?` and the tooltip explains, where a `0` would tell a user their
+   * data is gone. The two callers below reach it by different routes and must
+   * produce the identical shape — a "no answer" that differed by a field
+   * depending on how it arose would be read as two different states.
+   */
+  const unknown = (): KindResult => ({
+    kind: spec.kind,
+    count: null,
+    approx: false,
+    method: 'none',
+    status,
+    newest: null,
+    mismatched,
+    note: refusalNote(sample.refusal),
+  });
+
+  // The catch-all asked for everything and sorted client-side, so a full
+  // sample carrying none of it says nothing: the ceiling may have been filled
+  // by the kinds that have their own columns, with the others behind them.
+  if (spec.catchAll === true && matched.length === 0 && approx) return unknown();
+
   // Nothing arrived and the relay never said it was finished. That is not a
-  // count of zero and must not render as one: `≥0` is what an unanswered
-  // question looks like when a floor is put on an empty sample.
-  if (matched.length === 0 && !sample.complete) {
-    return {
-      kind: spec.kind,
-      count: null,
-      approx: false,
-      method: 'none',
-      status,
-      newest: null,
-      mismatched,
-      note: refusalNote(sample.refusal),
-    };
-  }
+  // count of zero: `≥0` is what an unanswered question looks like when a floor
+  // is put on an empty sample.
+  if (matched.length === 0 && !sample.complete) return unknown();
 
   const newestEvent = newestOf(matched);
   const newest =
@@ -154,7 +168,10 @@ async function sweepKind(
   // no tracker lists as supporting 45), and the cost of being wrong is one
   // timeout on a relay that already returned a ceiling-capped sample. A relay
   // that never hit the ceiling is never asked twice.
-  if (result.approx && result.count !== null && result.count > 0) {
+  // Never for the catch-all: `COUNT` over its filter counts the author's whole
+  // output on that relay, named kinds included, and would report a total for
+  // "everything else" that is larger than everything else.
+  if (spec.catchAll !== true && result.approx && result.count !== null && result.count > 0) {
     const exact = await socket.count(filters, COUNT_TIMEOUT_MS);
     if (exact !== null && exact >= result.count) {
       return { ...result, count: exact, approx: false, method: 'count' };

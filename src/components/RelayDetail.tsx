@@ -10,7 +10,7 @@
  */
 import { useState } from 'react';
 
-import { kindLabel, kindSpec } from '@/config/kinds';
+import { kindSpec, kindTag } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import { compactCount, since } from '@/lib/format';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
@@ -20,6 +20,11 @@ import { Button } from '@/components/ui/Button';
 import { RawEventsDialog } from '@/components/RawEventsDialog';
 import { RelayLink } from '@/components/ui/RelayLink';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
+
+/** The label column, and the indent every line under it lines up with. One
+ *  pair rather than three literals: they only mean anything together. */
+const LABEL_COLUMN = 'w-28';
+const LABEL_INDENT = 'pl-28';
 
 const METHOD_NOTE: Record<KindResult['method'], string> = {
   count: 'exact — the relay gave a total',
@@ -42,7 +47,22 @@ function KindLine({
   return (
     <div className="border-b border-surface-border/60 py-sm">
       <div className="flex items-baseline gap-sm">
-        <span className="w-24 shrink-0 text-base text-ink-primary">{kindLabel(result.kind)}</span>
+        {/* Plain name over protocol name: "messages" is what was asked for,
+            "kind 4 · NIP-04" is what it takes to search the spec, report a
+            relay bug, or match this against another client's output. Stacked
+            rather than inline because the panel is 380px wide and the count
+            beside it is the thing being read. A kind this build does not know
+            has no plain name to give, so it gets the number once. */}
+        <span className={`${LABEL_COLUMN} shrink-0 text-base text-ink-primary`}>
+          {spec === undefined ? (
+            `kind ${result.kind}`
+          ) : (
+            <span className="flex flex-col">
+              {spec.label}
+              <span className="font-mono text-xs text-ink-muted">{kindTag(spec)}</span>
+            </span>
+          )}
+        </span>
         <span className="font-mono text-base text-ink-primary">
           {count === null ? '—' : `${result.approx ? '≥' : ''}${compactCount(count)}`}
         </span>
@@ -69,7 +89,7 @@ function KindLine({
       </div>
 
       {result.newest && (
-        <div className="mt-xs pl-24 text-sm text-ink-secondary">
+        <div className={`mt-xs ${LABEL_INDENT} text-sm text-ink-secondary`}>
           most recent {since(result.newest.created_at)}{' '}
           <span className="font-mono text-xs text-ink-muted">{result.newest.id.slice(0, 16)}…</span>{' '}
           {result.newest.verified === true && <Badge tone="success">signature ok</Badge>}
@@ -85,7 +105,7 @@ function KindLine({
       )}
 
       {result.note !== null && (
-        <p className="mt-xs pl-24 font-mono text-xs text-ink-muted">{result.note}</p>
+        <p className={`mt-xs ${LABEL_INDENT} font-mono text-xs text-ink-muted`}>{result.note}</p>
       )}
     </div>
   );

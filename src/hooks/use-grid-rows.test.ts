@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
 import type { KindResult, RelayResult } from '@/services/sweep/types';
 
-import { buildRows, DEFAULT_FILTERS } from './use-grid-rows';
+import { buildRows, DEFAULT_FILTERS, WIDE_FILTERS } from './use-grid-rows';
 import type { GridFilters } from './use-grid-rows';
 
 function relay(url: string, overrides: Partial<RelayDescriptor> = {}): RelayDescriptor {
@@ -58,6 +58,14 @@ function result(url: string, overrides: Partial<RelayResult> = {}): RelayResult 
   };
 }
 
+/**
+ * Rows for one set of relays and results, with every filter widened.
+ *
+ * The baseline is deliberately not `DEFAULT_FILTERS`: `carryingOnly` ships on,
+ * and leaving it on here would mean every test about some *other* filter had
+ * two of them running, so an assertion could no longer say which one dropped a
+ * row. The default itself is asserted on its own below.
+ */
 function rowsFor(
   relays: RelayDescriptor[],
   results: RelayResult[],
@@ -65,6 +73,7 @@ function rowsFor(
 ) {
   return buildRows(relays, new Map(results.map((entry) => [entry.url, entry])), new Map(), {
     ...DEFAULT_FILTERS,
+    carryingOnly: false,
     ...filters,
   });
 }
@@ -101,6 +110,12 @@ describe('buildRows', () => {
       { carryingOnly: true },
     );
     expect(rows.map((row) => row.relay.url)).toEqual(['wss://b.example']);
+  });
+
+  it('holds something is on out of the box', () => {
+    // The one filter that ships on: a full sweep is mostly relays holding
+    // nothing, and the dozen that matter are unreadable underneath them.
+    expect(DEFAULT_FILTERS.carryingOnly).toBe(true);
   });
 
   it('filters to relays that replied at all', () => {
@@ -169,5 +184,25 @@ describe('buildRows', () => {
   it('offers no diff when there is no previous run to compare against', () => {
     const { rows } = rowsFor(relays, [result('wss://a.example')]);
     expect(rows.every((row) => row.diff === null)).toBe(true);
+  });
+});
+
+describe('the filter presets', () => {
+  it('opens narrowed by exactly one thing, and widens to nothing', () => {
+    // The pair is one object plus an override, so a seventh narrowing filter
+    // added tomorrow is off in `WIDE_FILTERS` by construction. Spelled out
+    // twice, "show all" could quietly keep one on and simply show fewer rows
+    // than it promises — a failure with no symptom but a shorter list.
+    const narrowed = Object.entries(WIDE_FILTERS).filter(([key]) => {
+      const wide = WIDE_FILTERS[key as keyof typeof WIDE_FILTERS];
+      return DEFAULT_FILTERS[key as keyof typeof WIDE_FILTERS] !== wide;
+    });
+
+    expect(narrowed.map(([key]) => key)).toEqual(['carryingOnly']);
+    expect(
+      Object.values(WIDE_FILTERS).every(
+        (value) => value === '' || value === false || value === null,
+      ),
+    ).toBe(true);
   });
 });

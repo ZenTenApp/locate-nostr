@@ -14,12 +14,15 @@
  *    is exactly what a bounded sweep must not do: a slot has to be released
  *    the moment its relay is done with.
  *
- * So this is deliberately small: open, ask, read, close. It never publishes,
- * never authenticates and never signs, which is also why it can be pointed at
- * an arbitrary list of strangers' hosts in the first place.
+ * So this is deliberately small: open, ask, read, close — and, for a purge,
+ * publish one already-signed event and wait for the relay's `OK`. It never
+ * authenticates and never signs: signing happens behind the signer facade in
+ * `services/nostr/signer.ts`, and nothing on this socket can produce an event,
+ * only carry one.
  */
 import { errorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import type { SignedEvent } from '@/services/nostr/events';
 
 /** A relay's event, as it arrived. Every field is untrusted. */
 export interface RelayEvent {
@@ -61,6 +64,19 @@ export interface SampleResult {
   refusal: CloseReason | null;
 }
 
+/**
+ * What a relay said about an event it was sent.
+ *
+ * `accepted: false` and no answer at all are deliberately different values:
+ * a relay that rejects a delete request said so, and one that never answered
+ * may have applied it, may have dropped it, and cannot be reported as either.
+ */
+export interface PublishAck {
+  accepted: boolean;
+  /** The relay's own message, verbatim and truncated. Empty when it sent none. */
+  message: string;
+}
+
 export class RelayConnectError extends Error {}
 
 interface PendingSub {
@@ -74,6 +90,21 @@ interface PendingCount {
   settle: (count: number | null) => void;
   timer: ReturnType<typeof setTimeout>;
 }
+
+interface PendingPublish {
+  settle: (ack: PublishAck | null) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Longest relay-authored message kept, anywhere.
+ *
+ * An `OK` reason and a `CLOSED` reason are the same thing — text a stranger's
+ * server wrote, which this app renders — so they are bounded by the same
+ * number rather than by two literals that happen to agree today. Exported
+ * because the sweep truncates `CLOSED` reasons on its own side.
+ */
+export const MAX_RELAY_MESSAGE = 160;
 
 /** `["EVENT", <id>, {...}]` → the event, or null if the shape is wrong. A
  *  relay is free to send anything; nothing downstream may assume it did not. */
@@ -110,6 +141,9 @@ export class RelaySocket {
   private readonly ws: WebSocket;
   private readonly subs = new Map<string, PendingSub>();
   private readonly counts = new Map<string, PendingCount>();
+  /** Keyed by event id, which is what a relay's `OK` refers to — publishes
+   *  have no subscription id of their own. */
+  private readonly publishes = new Map<string, PendingPublish>();
   private serial = 0;
   private closed = false;
 
@@ -233,6 +267,34 @@ export class RelaySocket {
     });
   }
 
+  /**
+   * `EVENT` one signed event and wait for the relay's `OK`.
+   *
+   * Resolves to `null` on silence rather than inventing a verdict. This is
+   * the only write this app performs, and the difference between "the relay
+   * refused" and "the relay never said" is the difference between telling a
+   * user their data is still there and telling them nobody knows — see
+   * {@link PublishAck}.
+   */
+  publish(event: SignedEvent, timeoutMs: number): Promise<PublishAck | null> {
+    if (this.closed) return Promise.resolve(null);
+    return new Promise<PublishAck | null>((resolve) => {
+      const timer = setTimeout(() => {
+        this.publishes.delete(event.id);
+        resolve(null);
+      }, timeoutMs);
+      this.publishes.set(event.id, {
+        timer,
+        settle: (ack) => {
+          clearTimeout(timer);
+          this.publishes.delete(event.id);
+          resolve(ack);
+        },
+      });
+      this.send(['EVENT', event]);
+    });
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -314,9 +376,22 @@ export class RelaySocket {
         this.counts.get(id)?.settle(typeof value === 'number' ? value : null);
         return;
       }
+      case 'OK': {
+        // `["OK", <event id>, <bool>, <message>]`. The id is the event's, not
+        // a subscription's, so an `OK` for something this socket did not send
+        // — which relays do emit — finds nothing and is dropped.
+        const pending = this.publishes.get(id);
+        if (!pending) return;
+        const note = typeof message[3] === 'string' ? message[3] : '';
+        pending.settle({
+          accepted: message[2] === true,
+          message: note.slice(0, MAX_RELAY_MESSAGE),
+        });
+        return;
+      }
       default:
-        // NOTICE, OK, AUTH and anything non-standard: nothing here publishes
-        // or authenticates, so there is nothing to do with them.
+        // NOTICE, AUTH and anything non-standard: this app never
+        // authenticates, so there is nothing to do with them.
         return;
     }
   }
@@ -332,5 +407,12 @@ export class RelaySocket {
       pending.settle(null);
     }
     this.counts.clear();
+    // A publish whose socket died is unknown, not refused: the relay may well
+    // have stored the event before the connection dropped.
+    for (const [, pending] of this.publishes) {
+      clearTimeout(pending.timer);
+      pending.settle(null);
+    }
+    this.publishes.clear();
   }
 }

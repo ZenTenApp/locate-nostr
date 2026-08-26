@@ -225,3 +225,51 @@ describe('RelaySocket lifecycle', () => {
     expect(await socket.count([{ kinds: [0] }], 5000)).toBeNull();
   });
 });
+
+describe('RelaySocket.publish', () => {
+  const SIGNED = { ...EVENT, kind: 5, content: 'because I said so' };
+
+  it('reports what the relay said about the event', async () => {
+    const { socket, ws } = await openSocket();
+    const pending = socket.publish(SIGNED, 1000);
+
+    ws.deliver(['OK', SIGNED.id, true, 'accepted']);
+
+    expect(await pending).toEqual({ accepted: true, message: 'accepted' });
+    expect(ws.sent.some((message) => message.startsWith('["EVENT"'))).toBe(true);
+    socket.close();
+  });
+
+  it('keeps a refusal apart from an acceptance, in the relay’s own words', async () => {
+    const { socket, ws } = await openSocket();
+    const pending = socket.publish(SIGNED, 1000);
+
+    ws.deliver(['OK', SIGNED.id, false, 'blocked: not your event']);
+
+    expect(await pending).toEqual({ accepted: false, message: 'blocked: not your event' });
+    socket.close();
+  });
+
+  it('answers null when the relay never acknowledges — silence is not a refusal', async () => {
+    // The distinction the whole purge report rests on: a relay that said
+    // nothing may have applied the deletion, and must not read as a refusal.
+    const { socket, ws } = await openSocket();
+    const pending = socket.publish(SIGNED, 5000);
+
+    ws.onclose?.({});
+
+    expect(await pending).toBeNull();
+    socket.close();
+  });
+
+  it('ignores an OK for an event it never sent', async () => {
+    const { socket, ws } = await openSocket();
+    const pending = socket.publish(SIGNED, 1000);
+
+    ws.deliver(['OK', 'f'.repeat(64), true, "someone else's event"]);
+    ws.deliver(['OK', SIGNED.id, true, 'mine']);
+
+    expect(await pending).toEqual({ accepted: true, message: 'mine' });
+    socket.close();
+  });
+});

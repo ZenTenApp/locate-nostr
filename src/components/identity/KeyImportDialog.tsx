@@ -25,11 +25,24 @@ import {
   pubkeyFromSshKey,
 } from '@/services/nostr/key-import';
 import type { IdentitySource, SshKeyInfo } from '@/services/nostr/key-import';
+import type { KeySource } from '@/services/worker/protocol';
 import { Button } from '@/components/ui/Button';
 import { SecretInput, SecretTextArea } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 
 export type KeyImportMode = Extract<IdentitySource, 'seed' | 'ssh'>;
+
+/**
+ * What the key is being read *for*.
+ *
+ * The two intents take the same secret through the same worker and differ in
+ * one thing that matters to the person typing it: how long the key lives
+ * afterwards. Identifying derives a pubkey and wipes it; signing keeps it for
+ * the length of a purge. Saying so is the whole reason this is a prop and not
+ * a hidden branch — the footnote under the field is a promise, and it has to
+ * be the true one.
+ */
+export type KeyImportIntent = 'identify' | 'sign';
 
 /** What the pasted key says about a passphrase, or `unknown` before one
  *  parses. */
@@ -53,27 +66,50 @@ function formatEstimate(seconds: number): string {
   return seconds >= 60 ? `~${Math.ceil(seconds / 60)} min` : `~${Math.round(seconds)}s`;
 }
 
-const COPY: Record<KeyImportMode, { title: string; subtitle: string; placeholder: string }> = {
+const COPY: Record<KeyImportMode, { title: string; placeholder: string }> = {
   seed: {
     title: 'Recovery phrase',
-    subtitle:
-      'Twelve or twenty-four BIP39 words, or an nsec. Used once to derive your public key, then wiped.',
     placeholder: 'leader monkey parrot ring guide accident before fence cannon height naive bean',
   },
   ssh: {
     title: 'SSH key',
-    subtitle:
-      'An encrypted OpenSSH Ed25519 key — the same key `chat` signs in with, so it yields the same identity.',
     placeholder: '-----BEGIN OPENSSH PRIVATE KEY-----',
+  },
+};
+
+/** What each intent tells the user about the key's lifetime, and what the
+ *  button says. One table rather than ternaries in four places. */
+const INTENT_COPY: Record<KeyImportIntent, { subtitle: string; action: string; note: string }> = {
+  identify: {
+    subtitle: 'Used once to work out your public key, then wiped. Nothing is signed.',
+    action: 'Use this identity',
+    note:
+      'The key is used once, in a worker, to compute your public key — then every buffer holding ' +
+      'it is zeroed and the worker is destroyed. Nothing is stored, and nothing is signed.',
+  },
+  sign: {
+    subtitle: 'Unlocked to sign delete requests, and dropped the moment the purge ends.',
+    action: 'Unlock for signing',
+    note:
+      'The key is unlocked inside a worker and stays there — never in the page, never on disk — ' +
+      'so a purge can sign each delete request without asking you again. It is destroyed with ' +
+      'the worker when the purge finishes or you close this screen.',
   },
 };
 
 export function KeyImportDialog({
   mode,
+  intent = 'identify',
+  onSubmit,
   onDone,
   onClose,
 }: {
   mode: KeyImportMode;
+  intent?: KeyImportIntent;
+  /** What to do with the secret. Defaults to deriving a public key and
+   *  discarding it; a purge passes the unlock that keeps it for signing. The
+   *  secret is handed over as an argument and never held here. */
+  onSubmit?: (source: KeySource, secret: string, passphrase: string) => Promise<PublicIdentity>;
   onDone: (identity: PublicIdentity, source: IdentitySource) => void;
   onClose: () => void;
 }) {
@@ -150,8 +186,9 @@ export function KeyImportDialog({
     setBusy(true);
     setError(null);
     try {
-      const identity =
-        mode === 'ssh'
+      const identity = onSubmit
+        ? await onSubmit(mode, secret, passphrase)
+        : mode === 'ssh'
           ? await pubkeyFromSshKey(secret, passphrase)
           : await pubkeyFromSeed(secret, passphrase);
       clearFields();
@@ -164,6 +201,7 @@ export function KeyImportDialog({
   };
 
   const copy = COPY[mode];
+  const intentCopy = INTENT_COPY[intent];
   /**
    * Three states, not two. Until a key parses, whether it needs a passphrase
    * is **unknown** — and saying "required" for unknown told users with an
@@ -191,7 +229,7 @@ export function KeyImportDialog({
   const blocked = !filled || busy;
 
   return (
-    <Modal title={copy.title} subtitle={copy.subtitle} onClose={onClose}>
+    <Modal title={copy.title} subtitle={intentCopy.subtitle} onClose={onClose}>
       <div className="flex flex-col gap-md">
         <SecretTextArea
           ref={secretRef}
@@ -247,18 +285,14 @@ export function KeyImportDialog({
           </p>
         )}
 
-        <p className="text-xs text-ink-muted">
-          The key is used once, in a worker, to compute your public key — then every buffer holding
-          it is zeroed and the worker is destroyed. Nothing is stored, and this app never signs
-          anything.
-        </p>
+        <p className="text-xs text-ink-muted">{intentCopy.note}</p>
 
         <div className="flex justify-end gap-sm">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={blocked}>
-            {busy ? 'Deriving…' : 'Use this identity'}
+            {busy ? 'Deriving…' : intentCopy.action}
           </Button>
         </div>
       </div>

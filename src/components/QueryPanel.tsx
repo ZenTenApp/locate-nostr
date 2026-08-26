@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 
-import { KIND_SPECS } from '@/config/kinds';
+import { KIND_SPECS, kindCode, kindTag } from '@/config/kinds';
 import { DISCOVERY_RELAYS, SAMPLE_LIMIT_CHOICES, SWEEP_CONCURRENCY_RANGE } from '@/config/sweep';
 import { compactCount, since } from '@/lib/format';
 import { shortIdentity } from '@/services/nostr/identity';
@@ -23,7 +23,7 @@ import type { IdentitySource } from '@/services/nostr/key-import';
 import { KeyImportDialog } from '@/components/identity/KeyImportDialog';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
 import type { KeyImportMode } from '@/components/identity/KeyImportDialog';
-import type { Directory, SelectionBreakdown } from '@/services/discovery/directory';
+import type { Directory, RelaySource, SelectionBreakdown } from '@/services/discovery/directory';
 import { DirectorySources } from '@/components/DirectorySources';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -41,6 +41,7 @@ export interface QueryPanelProps {
   includeDarknet: boolean;
   includeStale: boolean;
   pastedRelays: string;
+  relaySource: RelaySource;
   directory: Directory | null;
   breakdown: SelectionBreakdown;
   directoryLoading: boolean;
@@ -55,11 +56,33 @@ export interface QueryPanelProps {
     includeDarknet?: boolean;
     includeStale?: boolean;
     pastedRelays?: string;
+    relaySource?: RelaySource;
   }) => void;
   onStart: () => void;
   onCancel: () => void;
   onRefreshDirectory: () => void;
 }
+
+/**
+ * The two things the pasted list can mean, as data.
+ *
+ * Pasting used to be additive only, which answers "where on the network is my
+ * data" and cannot answer "is my data on these four relays" without sweeping
+ * thirteen hundred others to find out. The second question is a different
+ * question, not a smaller one, and it is answered in seconds.
+ */
+const SOURCE_CHOICES: { value: RelaySource; label: string; hint: string }[] = [
+  {
+    value: 'both',
+    label: 'add to the tracker list',
+    hint: 'Check every relay the trackers know about, plus the ones you paste.',
+  },
+  {
+    value: 'pasted',
+    label: 'check only these',
+    hint: 'Ignore the tracker list entirely and check only the relays you paste. Seconds instead of minutes, and it answers a different question: is my data on these particular relays.',
+  },
+];
 
 /** Where an identity came from, said in the one line under the box. */
 const SOURCE_LABEL: Record<IdentitySource, string> = {
@@ -87,9 +110,29 @@ export function QueryPanel(props: QueryPanelProps) {
     return () => clearTimeout(timer);
   }, []);
 
+  // A run starting folds the set-up away, whichever button started it — the
+  // Check button here, or Re-check on the cache banner, which cannot reach
+  // this component's state. Adjusted during render off the run itself rather
+  // than from each handler, so the two paths cannot drift and no extra pass
+  // is committed to the DOM first.
+  const [wasRunning, setWasRunning] = useState(props.running);
+  if (props.running !== wasRunning) {
+    setWasRunning(props.running);
+    if (props.running) {
+      setAdvanced(false);
+      setSourcesOpen(false);
+    }
+  }
+
   /** The relay-list line, as a sentence rather than a ternary in an
    *  attribute. */
   const directoryLabel = (): string => {
+    // In "check only these" mode the trackers are not the source of the
+    // number on screen, and saying they are would attribute the user's own
+    // list to somebody else.
+    if (props.relaySource === 'pasted') {
+      return `${compactCount(props.breakdown.selected)} relays from your own list`;
+    }
     if (props.directoryLoading) return 'finding relays…';
     if (props.directory === null) return 'no relays found yet';
     const answered =
@@ -261,7 +304,7 @@ export function QueryPanel(props: QueryPanelProps) {
               onClick={() => toggleKind(spec.kind)}
               {...tooltipHandlers({
                 title: spec.label,
-                lines: [spec.note, `${spec.nip}, event kind ${spec.kind}`],
+                lines: [spec.note, kindTag(spec)],
               })}
               className={`rounded-sm border px-sm py-0.5 text-sm transition ${
                 on
@@ -270,7 +313,7 @@ export function QueryPanel(props: QueryPanelProps) {
               }`}
             >
               {spec.label}
-              <span className="ml-xs font-mono text-xs text-ink-secondary">{spec.kind}</span>
+              <span className="ml-xs font-mono text-xs text-ink-secondary">{kindCode(spec)}</span>
             </button>
           );
         })}
@@ -321,7 +364,7 @@ export function QueryPanel(props: QueryPanelProps) {
           </div>
 
           <label className="flex flex-col text-sm text-ink-secondary">
-            Other relays to check
+            Your own relay list
             <TextArea
               rows={5}
               className="mt-xs"
@@ -331,8 +374,31 @@ export function QueryPanel(props: QueryPanelProps) {
             />
             <span className="mt-xs text-xs text-ink-muted">
               One per line. If the trackers already know a relay it keeps its details; the rest are
-              checked with everything about them unknown <Badge tone="info">yours</Badge>.
+              checked with everything about them unknown <Badge tone="info">yours</Badge>. A relay
+              you list here is never skipped for looking dead — you asked about it by name.
             </span>
+            <div className="mt-sm flex flex-wrap gap-xs">
+              {SOURCE_CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  type="button"
+                  onClick={() => props.onChange({ relaySource: choice.value })}
+                  {...tooltipHandlers({ title: choice.label, lines: [choice.hint] })}
+                  className={`rounded-sm border px-sm py-0.5 text-sm transition ${
+                    props.relaySource === choice.value
+                      ? 'border-brand-primary bg-brand-primaryDim text-ink-primary'
+                      : 'border-surface-border text-ink-muted hover:text-ink-secondary'
+                  }`}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+            {props.relaySource === 'pasted' && props.pastedRelays.trim() === '' && (
+              <span className="mt-xs text-xs text-state-warning">
+                Nothing to check — paste at least one relay, or switch back to the tracker list.
+              </span>
+            )}
           </label>
         </div>
       )}

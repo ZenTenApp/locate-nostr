@@ -17,19 +17,28 @@ export type GridStatus =
   | 'no-relays'
   /** A check is running; these filters have simply matched nothing so far. */
   | 'checking'
+  /** Relays to check, but nothing checked yet — the run has not been asked
+   *  for. Distinct from `idle`, which is a finished answer. */
+  | 'not-checked'
   | 'idle';
 
 /**
- * Which of the four an empty grid is.
+ * Which of the five an empty grid is.
  *
  * Pure and tested: every branch is a sentence the user reads in place of
  * results, and the wrong one turns "still working" into "there is nothing".
  */
 export function gridStatusFor(input: {
   relayCount: number;
+  /** Relays that have answered. Zero with a run neither running nor finished
+   *  is the first-load case, which the default "holds something" filter turns
+   *  into an empty grid — and an empty grid must not read as "nothing found"
+   *  before anything was asked. */
+  resultCount: number;
   directoryLoading: boolean;
   running: boolean;
 }): GridStatus {
   if (input.relayCount === 0) return input.directoryLoading ? 'finding-relays' : 'no-relays';
-  return input.running ? 'checking' : 'idle';
+  if (input.running) return 'checking';
+  return input.resultCount === 0 ? 'not-checked' : 'idle';
 }

@@ -14,8 +14,7 @@ import type { RelayResult } from '@/services/sweep/types';
 
 export type SortKey = 'hits' | 'events' | 'latency' | 'url' | 'change';
 
-/** What the grid can be narrowed to. Every field is a widening default so an
- *  untouched filter bar shows the whole sweep. */
+/** What the grid can be narrowed to. */
 export interface GridFilters {
   text: string;
   /** Only relays holding at least one event of at least one queried kind. */
@@ -32,13 +31,34 @@ export interface GridFilters {
   descending: boolean;
 }
 
-export const DEFAULT_FILTERS: GridFilters = {
+/**
+ * Everything the sweep covered, narrowed by nothing.
+ *
+ * What the grid's "show all" widens to, and the base the defaults are built
+ * from — every narrowing control in one place, so a seventh one added
+ * tomorrow is off here by construction. Spelling both sets out separately
+ * meant "show all" could quietly keep a filter on and simply show fewer rows
+ * than it promised.
+ *
+ * The sort is not part of it: reaching for the missing rows is not a request
+ * to reorder the ones already on screen.
+ */
+export const WIDE_FILTERS: Omit<GridFilters, 'sort' | 'descending'> = {
   text: '',
   carryingOnly: false,
   answeredOnly: false,
   kind: null,
   hideGated: false,
   changedOnly: false,
+};
+
+export const DEFAULT_FILTERS: GridFilters = {
+  ...WIDE_FILTERS,
+  // The one non-widening default. The question this app answers is "who holds
+  // my data", and on a full sweep the overwhelming majority of relays answer
+  // with nothing — a thousand empty rows buries the dozen that matter. The
+  // chip is right there in the filter bar to see them all.
+  carryingOnly: true,
   // Most events first. Sorting by how many *types* a relay carries buries the
   // relay holding four thousand of your messages under one holding a single
   // copy of each of six things.

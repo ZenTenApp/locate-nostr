@@ -22,7 +22,7 @@ import { InvalidIdentityError, parseIdentity } from '@/services/nostr/identity';
 import { logger } from '@/lib/logger';
 import { sweepCache } from '@/services/cache/db';
 import { cachedDirectory, fetchDirectory, selectRelays } from '@/services/discovery/directory';
-import type { Directory } from '@/services/discovery/directory';
+import type { Directory, RelaySource } from '@/services/discovery/directory';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
 import { runSweep } from '@/services/sweep/engine';
 import { baselineOf } from '@/services/sweep/diff';
@@ -63,6 +63,9 @@ interface SweepState {
   includeDarknet: boolean;
   includeStale: boolean;
   pastedRelays: string;
+  /** Whether the sweep covers the whole directory plus what was pasted, or
+   *  only what was pasted. See {@link RelaySource}. */
+  relaySource: RelaySource;
 
   status: RunStatus;
   progress: Progress;
@@ -95,7 +98,13 @@ interface SweepState {
     patch: Partial<
       Pick<
         SweepState,
-        'kinds' | 'sampleLimit' | 'concurrency' | 'includeDarknet' | 'includeStale' | 'pastedRelays'
+        | 'kinds'
+        | 'sampleLimit'
+        | 'concurrency'
+        | 'includeDarknet'
+        | 'includeStale'
+        | 'pastedRelays'
+        | 'relaySource'
       >
     >,
   ) => void;
@@ -132,6 +141,7 @@ export const useSweepStore = create<SweepState>((set, get) => ({
   includeDarknet: false,
   includeStale: false,
   pastedRelays: '',
+  relaySource: 'both',
 
   status: 'idle',
   progress: { done: 0, total: 0 },
@@ -288,6 +298,7 @@ export const useSweepStore = create<SweepState>((set, get) => ({
   selectedRelays() {
     const state = get();
     return selectRelays(state.directory?.relays ?? [], {
+      source: state.relaySource,
       includeDarknet: state.includeDarknet,
       includeStale: state.includeStale,
       pasted: state.pastedRelays,

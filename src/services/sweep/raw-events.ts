@@ -18,7 +18,7 @@ import { errorMessage } from '@/lib/errors';
 import type { CloseReason, RelayEvent } from '@/services/relay/socket';
 import { RelaySocket } from '@/services/relay/socket';
 import { verifySignature } from '@/services/relay/verify';
-import { filtersFor, splitMatches } from '@/services/sweep/filters';
+import { eventMatches, filterHonoured, filtersFor } from '@/services/sweep/filters';
 
 /** One event as fetched, with the checks this app can make about it. */
 export interface InspectedEvent {
@@ -31,6 +31,15 @@ export interface InspectedEvent {
   verified: boolean;
   /** The relay returned it despite it not matching the filter it was sent. */
   offFilter: boolean;
+  /**
+   * Whether it counts towards the column being viewed.
+   *
+   * Only ever false for the catch-all, whose request carries no `kinds`: a
+   * profile event coming back is the relay answering correctly, and it belongs
+   * to the `profile` column rather than to `other`. Without this the raw view
+   * would either hide it or brand an honest relay a liar.
+   */
+  counted: boolean;
 }
 
 export interface RawEventsResult {
@@ -60,14 +69,13 @@ export async function fetchRelayEvents(
   try {
     socket = await RelaySocket.open(relayUrl, CONNECT_TIMEOUT_MS, signal);
     const sample = await socket.sample(filtersFor(spec, author), limit, QUERY_TIMEOUT_MS);
-    const { matched } = splitMatches(sample.events, spec, author);
-    const matchedIds = new Set(matched.map((event) => event.id));
 
     return {
       events: sample.events.map((event) => ({
         event,
         verified: verifySignature(event),
-        offFilter: !matchedIds.has(event.id),
+        offFilter: !filterHonoured(event, spec, author),
+        counted: eventMatches(event, spec, author),
       })),
       refusal: sample.refusal,
       complete: sample.complete,

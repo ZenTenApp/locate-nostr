@@ -8,6 +8,7 @@
  * them. Relays that ignore `authors` or `kinds` are common enough that
  * counting whatever arrives would rank the broken ones highest.
  */
+import { isNamedKind } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import type { RelayEvent, RelayFilter } from '@/services/relay/socket';
 
@@ -20,6 +21,12 @@ import type { RelayEvent, RelayFilter } from '@/services/relay/socket';
  * this counts each event once.
  */
 export function filtersFor(spec: KindSpec, author: string): RelayFilter[] {
+  // The catch-all cannot be a `kinds` filter: NIP-01 has no "anything but
+  // these". So the relay is asked for the author's events with no kind
+  // restriction at all, and the named kinds are dropped on arrival — which is
+  // why its count is a floor far more often than the others'.
+  if (spec.catchAll === true) return [{ authors: [author] }];
+
   const base: RelayFilter = { kinds: [spec.kind] };
   if (spec.dTag !== undefined) base['#d'] = [spec.dTag];
 
@@ -31,8 +38,9 @@ export function filtersFor(spec: KindSpec, author: string): RelayFilter[] {
   return [{ ...base, authors: [author] }];
 }
 
-/** Does this event answer what was asked? */
+/** Does this event belong in this kind's column? */
 export function eventMatches(event: RelayEvent, spec: KindSpec, author: string): boolean {
+  if (spec.catchAll === true) return event.pubkey === author && !isNamedKind(event.kind);
   if (event.kind !== spec.kind) return false;
 
   if (spec.dTag !== undefined) {
@@ -43,6 +51,20 @@ export function eventMatches(event: RelayEvent, spec: KindSpec, author: string):
   if (event.pubkey === author) return true;
   // The recipient half of the DM union.
   return spec.authGated && event.tags.some((tag) => tag[0] === 'p' && tag[1] === author);
+}
+
+/**
+ * Did the relay serve what it was *asked* for?
+ *
+ * Not the same question as {@link eventMatches}, and the catch-all is why. Its
+ * request carries no `kinds`, so a relay answering with a profile event has
+ * honoured the filter exactly — that event simply belongs in another column.
+ * Counting it as the relay ignoring the filter would put a red mark on every
+ * honest relay on the network the moment `other` is switched on.
+ */
+export function filterHonoured(event: RelayEvent, spec: KindSpec, author: string): boolean {
+  if (spec.catchAll === true) return event.pubkey === author;
+  return eventMatches(event, spec, author);
 }
 
 export interface MatchSplit {
@@ -61,7 +83,9 @@ export function splitMatches(
   let mismatched = 0;
   for (const event of events) {
     if (eventMatches(event, spec, author)) matched.push(event);
-    else mismatched += 1;
+    // Served as asked but belonging to another column — the catch-all's view
+    // of a profile event. Neither counted here nor held against the relay.
+    else if (!filterHonoured(event, spec, author)) mismatched += 1;
   }
   return { matched, mismatched };
 }

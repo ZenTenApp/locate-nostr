@@ -73,7 +73,7 @@ describe('selectRelays', () => {
   it('sweeps only fresh clearnet relays by default', () => {
     const selected = selectRelays(
       directory,
-      { includeDarknet: false, includeStale: false, pasted: '' },
+      { source: 'both', includeDarknet: false, includeStale: false, pasted: '' },
       NOW,
     );
     expect(selected.map((entry) => entry.url)).toEqual(['wss://a.example']);
@@ -82,16 +82,53 @@ describe('selectRelays', () => {
   it('opts darknet and stale relays back in', () => {
     const selected = selectRelays(
       directory,
-      { includeDarknet: true, includeStale: true, pasted: '' },
+      { source: 'both', includeDarknet: true, includeStale: true, pasted: '' },
       NOW,
     );
     expect(selected).toHaveLength(3);
   });
 
+  it('never skips a pasted relay for looking dead — the user named it', () => {
+    const selected = selectRelays(
+      directory,
+      {
+        source: 'both',
+        includeDarknet: false,
+        includeStale: false,
+        pasted: 'wss://old.example',
+      },
+      NOW,
+    );
+    expect(selected.map((entry) => entry.url)).toEqual(['wss://a.example', 'wss://old.example']);
+  });
+
+  it('checks only the pasted list when told to, keeping what the trackers know', () => {
+    const selected = selectRelays(
+      directory,
+      {
+        source: 'pasted',
+        includeDarknet: false,
+        includeStale: false,
+        pasted: 'wss://a.example\nwss://mine.example',
+      },
+      NOW,
+    );
+    expect(selected.map((entry) => entry.url)).toEqual(['wss://a.example', 'wss://mine.example']);
+    // The tracker's metadata survives being named by hand — a pasted relay the
+    // monitors know is not blanked out.
+    expect(selected[0]?.pasted).toBe(false);
+    expect(selected[1]?.pasted).toBe(true);
+  });
+
   it('includes pasted relays and drops the unparseable ones', () => {
     const selected = selectRelays(
       directory,
-      { includeDarknet: false, includeStale: false, pasted: 'wss://mine.example\nnot a relay' },
+      {
+        source: 'both',
+        includeDarknet: false,
+        includeStale: false,
+        pasted: 'wss://mine.example\nnot a relay',
+      },
       NOW,
     );
     expect(selected.map((entry) => entry.url)).toEqual(['wss://a.example', 'wss://mine.example']);
@@ -108,7 +145,7 @@ describe('selectionBreakdown', () => {
   it('accounts for every relay, so the two numbers on screen reconcile', () => {
     const breakdown = selectionBreakdown(
       directory,
-      { includeDarknet: false, includeStale: false, pasted: '' },
+      { source: 'both', includeDarknet: false, includeStale: false, pasted: '' },
       NOW,
     );
     expect(breakdown).toMatchObject({ total: 3, darknet: 1, stale: 1, pasted: 0, selected: 1 });
@@ -118,7 +155,7 @@ describe('selectionBreakdown', () => {
   it('counts a stale onion relay once, under the reason that excluded it', () => {
     const breakdown = selectionBreakdown(
       [relay({ url: 'wss://old.onion', network: 'tor', monitoredAt: 0 })],
-      { includeDarknet: false, includeStale: false, pasted: '' },
+      { source: 'both', includeDarknet: false, includeStale: false, pasted: '' },
       NOW,
     );
     expect(breakdown.darknet).toBe(1);
@@ -128,7 +165,7 @@ describe('selectionBreakdown', () => {
   it('counts pasted relays and still sweeps them', () => {
     const breakdown = selectionBreakdown(
       directory,
-      { includeDarknet: false, includeStale: false, pasted: 'wss://mine.example' },
+      { source: 'both', includeDarknet: false, includeStale: false, pasted: 'wss://mine.example' },
       NOW,
     );
     expect(breakdown.pasted).toBe(1);

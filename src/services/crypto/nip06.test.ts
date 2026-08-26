@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
+import { nip19 } from 'nostr-tools';
+import { getPublicKey } from 'nostr-tools/pure';
+
 import { KeyError } from '@/lib/errors';
 
-import { pubkeyFromMnemonic, pubkeyFromNsec } from './nip06';
+import {
+  publicIdentity,
+  pubkeyFromMnemonic,
+  pubkeyFromNsec,
+  secretKeyFromMnemonic,
+  secretKeyFromNsec,
+} from './nip06';
 
 /**
  * NIP-06's own published test vector. External truth: if the derivation path,
@@ -68,5 +77,37 @@ describe('pubkeyFromNsec', () => {
 
   it('refuses nonsense', () => {
     expect(() => pubkeyFromNsec('nsec1nope')).toThrow(KeyError);
+  });
+});
+
+/**
+ * The signing half, added for purges.
+ *
+ * The property that matters is that it is the *same* derivation: a secret key
+ * that produced a different pubkey than the one the sweep filtered on would
+ * sign delete requests no relay would honour, for an identity nobody has.
+ */
+describe('secretKeyFromMnemonic', () => {
+  it('roots the identity the public path derives', () => {
+    const secret = secretKeyFromMnemonic(NIP06_VECTOR.mnemonic);
+    expect(secret).toHaveLength(32);
+    expect(publicIdentity(getPublicKey(secret)).npub).toBe(NIP06_VECTOR.npub);
+  });
+
+  it('hands back a copy the caller owns — not a view into a wiped buffer', () => {
+    // The derivation zeroes every internal buffer on the way out. If this were
+    // a view rather than a copy, the key would be all zeroes by the time the
+    // worker signed with it, and every signature would be for the wrong key.
+    const secret = secretKeyFromMnemonic(NIP06_VECTOR.mnemonic);
+    expect(secret.some((byte) => byte !== 0)).toBe(true);
+  });
+});
+
+describe('secretKeyFromNsec', () => {
+  it('roots the identity the public path derives', () => {
+    const identity = pubkeyFromMnemonic(NIP06_VECTOR.mnemonic);
+    const secret = secretKeyFromMnemonic(NIP06_VECTOR.mnemonic);
+    const nsec = nip19.nsecEncode(secret);
+    expect(publicIdentity(getPublicKey(secretKeyFromNsec(nsec))).npub).toBe(identity.npub);
   });
 });

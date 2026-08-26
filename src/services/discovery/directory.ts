@@ -165,8 +165,20 @@ export function withPastedRelays(
   return [...byUrl.values()];
 }
 
+/**
+ * Where the list to sweep comes from.
+ *
+ * `both` is the tool's normal question — "where on the network is my data" —
+ * and the pasted relays are additions to it. `pasted` is a different question
+ * with the same machinery: "is my data on *these* relays", asked of a handful
+ * of URLs, answered in seconds instead of minutes. Sweeping thirteen hundred
+ * relays to find out about four is the cost that made people not ask.
+ */
+export type RelaySource = 'both' | 'pasted';
+
 /** What the user has excluded from the sweep. */
 export interface RelaySelection {
+  source: RelaySource;
   includeDarknet: boolean;
   includeStale: boolean;
   /** Raw textarea contents; parsed here so the caller never has to. */
@@ -188,7 +200,7 @@ export interface SelectionBreakdown {
   darknet: number;
   /** Excluded as stale: no monitor has reported them recently. */
   stale: number;
-  /** Added by the user rather than reported by a monitor. */
+  /** URLs the user typed in, whether or not a monitor also reports them. */
   pasted: number;
   /** What is left, and what the sweep will actually open. */
   selected: number;
@@ -196,6 +208,16 @@ export interface SelectionBreakdown {
 
 /** Why a relay is being left out, or `null` when it is not. */
 type Exclusion = 'darknet' | 'stale';
+
+/** A relay in the running, and whether the user named it themselves. */
+interface Candidate {
+  relay: RelayDescriptor;
+  /** The URL appears in the pasted box. Not the same as
+   *  {@link RelayDescriptor.pasted}, which means "no monitor has ever reported
+   *  this relay" — a relay can be both known to the monitors and typed in by
+   *  hand, and the two facts pull in different directions here. */
+  chosen: boolean;
+}
 
 /**
  * The single exclusion rule.
@@ -206,23 +228,39 @@ type Exclusion = 'darknet' | 'stale';
  * count beside the button would stop matching what the sweep actually opened,
  * which is precisely the "where did three hundred relays go" confusion the
  * breakdown exists to answer.
+ *
+ * A relay the user typed in is never excluded as stale. "No monitor has seen
+ * it in a day" is a good reason to skip a relay nobody asked about and a
+ * terrible one to skip the four relays somebody just pasted — the answer to
+ * "is my data on this relay" cannot be a silent zero because a third party
+ * has stopped watching it. Darknet still applies to everything: an onion
+ * address is unreachable from an ordinary browser whoever named it, and the
+ * checkbox that says otherwise is right there.
  */
 function exclusionFor(
-  relay: RelayDescriptor,
+  candidate: Candidate,
   selection: RelaySelection,
   now: number,
 ): Exclusion | null {
-  if (!selection.includeDarknet && relay.network !== 'clearnet') return 'darknet';
-  if (!selection.includeStale && isStale(relay, now)) return 'stale';
+  if (!selection.includeDarknet && candidate.relay.network !== 'clearnet') return 'darknet';
+  if (!selection.includeStale && !candidate.chosen && isStale(candidate.relay, now)) return 'stale';
   return null;
 }
 
-/** Directory plus pasted entries, before any exclusion. */
-function candidates(
-  relays: readonly RelayDescriptor[],
-  selection: RelaySelection,
-): RelayDescriptor[] {
-  return withPastedRelays(relays, parsePastedRelays(selection.pasted));
+/**
+ * The relays in the running, before any exclusion.
+ *
+ * In `pasted` mode the directory is not dropped, only narrowed to the URLs the
+ * user typed: a pasted relay the monitors know keeps their metadata, so the
+ * NIP list, the AUTH flag and the tracker count are still there to explain the
+ * answer it gives.
+ */
+function candidates(relays: readonly RelayDescriptor[], selection: RelaySelection): Candidate[] {
+  const pasted = parsePastedRelays(selection.pasted);
+  const chosen = new Set(pasted.map((entry) => entry.url));
+  const all = withPastedRelays(relays, pasted);
+  const wanted = selection.source === 'pasted' ? all.filter((relay) => chosen.has(relay.url)) : all;
+  return wanted.map((relay) => ({ relay, chosen: chosen.has(relay.url) }));
 }
 
 export function selectionBreakdown(
@@ -239,11 +277,11 @@ export function selectionBreakdown(
     selected: 0,
   };
 
-  for (const relay of all) {
-    if (relay.pasted) breakdown.pasted += 1;
+  for (const candidate of all) {
+    if (candidate.chosen) breakdown.pasted += 1;
     // Counted under the reason that actually excluded it, in the order the
     // filter applies — a stale onion relay is one exclusion, not two.
-    const excluded = exclusionFor(relay, selection, now);
+    const excluded = exclusionFor(candidate, selection, now);
     if (excluded === null) breakdown.selected += 1;
     else breakdown[excluded] += 1;
   }
@@ -264,7 +302,7 @@ export function selectRelays(
   selection: RelaySelection,
   now = Date.now(),
 ): RelayDescriptor[] {
-  return candidates(relays, selection).filter(
-    (relay) => exclusionFor(relay, selection, now) === null,
-  );
+  return candidates(relays, selection)
+    .filter((candidate) => exclusionFor(candidate, selection, now) === null)
+    .map((candidate) => candidate.relay);
 }

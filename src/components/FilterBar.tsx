@@ -2,6 +2,7 @@
  *  itself lives in `use-grid-rows.ts`. */
 import { KIND_SPECS } from '@/config/kinds';
 import type { GridFilters, SortKey } from '@/hooks/use-grid-rows';
+import { Button } from '@/components/ui/Button';
 import { CheckLabel, Input, Select } from '@/components/ui/Field';
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -20,6 +21,8 @@ export function FilterBar({
   matched,
   total,
   hasBaseline,
+  canPurge,
+  onPurgeMode,
 }: {
   filters: GridFilters;
   onChange: (patch: Partial<GridFilters>) => void;
@@ -27,6 +30,10 @@ export function FilterBar({
   total: number;
   /** Only offer the change filter when there is a previous run to compare to. */
   hasBaseline: boolean;
+  /** A purge needs an identity to purge for; without one the control is not
+   *  offered at all rather than offered and rejected. */
+  canPurge: boolean;
+  onPurgeMode: () => void;
 }) {
   return (
     <section className="flex flex-wrap items-center gap-md border-b border-surface-border bg-surface-panel px-lg py-sm">
@@ -108,6 +115,11 @@ export function FilterBar({
       <span className="ml-auto text-sm text-ink-muted">
         showing {matched} of {total} relays
       </span>
+      {canPurge && (
+        <Button variant="ghost" className="px-sm py-0 text-state-error" onClick={onPurgeMode}>
+          Purge…
+        </Button>
+      )}
     </section>
   );
 }

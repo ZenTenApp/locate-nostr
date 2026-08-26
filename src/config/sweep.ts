@@ -61,26 +61,36 @@ export const DISCOVERY_TIMEOUT_MS = 20_000;
  *
  * Chrome caps WebSocket connections at 255 per host but has no global cap;
  * the real ceiling is the machine's file descriptors and the CPU cost of a
- * thousand TLS handshakes. Measured over the full directory at this setting:
+ * thousand TLS handshakes. Measured over the full directory at 48 sockets:
  * 1,353 relays in 79s from Node, 1,339 in 3m54s from Chrome, which queues the
  * handshakes. Results stream in from the first second either way.
+ *
+ * The default is deliberately far below that ceiling, and equal to the range's
+ * floor: a handful of sockets is gentle on the network and on the relays, and
+ * costs wall-clock rather than accuracy. Sweeping the whole directory in one
+ * sitting means moving the slider up.
  */
-export const SWEEP_CONCURRENCY = 48;
+export const SWEEP_CONCURRENCY = 4;
 
-/** Bounds on what the concurrency slider offers. Above ~96 the handshakes
- *  start queueing behind each other and the sweep gets slower, not faster. */
+/** Bounds on what the concurrency slider offers. The floor is the default —
+ *  the slider only goes up. Above ~96 the handshakes start queueing behind
+ *  each other and the sweep gets slower, not faster. */
 export const SWEEP_CONCURRENCY_RANGE = { min: 4, max: 96 } as const;
 
 /**
  * How long to wait for the socket to open.
  *
- * Set from a browser measurement, not from what a relay "should" take. Chrome
- * does not open forty-eight TLS handshakes at once — it queues them — so the
- * clock here covers time spent waiting for a slot as well as the handshake
- * itself. Measured over the full directory: at 4s, **21%** of relays were
- * reported unreachable; at 9s, **2%**, matching what the same sweep sees from
- * Node with no browser socket queue. The other nineteen percent were alive the
- * whole time.
+ * Set from a browser measurement, not from what a relay "should" take. The
+ * measurement was taken at 48 concurrent sockets, which Chrome does not open
+ * at once — it queues them — so the clock here covers time spent waiting for a
+ * slot as well as the handshake itself. Measured over the full directory: at
+ * 4s, **21%** of relays were reported unreachable; at 9s, **2%**, matching what
+ * the same sweep sees from Node with no browser socket queue. The other
+ * nineteen percent were alive the whole time.
+ *
+ * The default concurrency is now far below that, so there is no queue to wait
+ * through and the budget is pure headroom — but the slider goes back up to 48
+ * and beyond, where the queue is real again.
  *
  * That makes this the most dangerous number in the file: too low and the app
  * confidently reports live relays as dead, which is the exact failure it

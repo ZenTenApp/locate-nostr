@@ -21,12 +21,23 @@ import { logger } from '@/lib/logger';
 import { publicIdentity } from '@/services/crypto/nip06';
 import { HEX_64 } from '@/services/nostr/identity';
 import type { PublicIdentity } from '@/services/crypto/nip06';
+import type { EventTemplate, SignedEvent } from '@/services/nostr/events';
 
-/** The sliver of NIP-07 this app uses. Signing is deliberately not declared —
- *  nothing here signs, and a type that offers it invites a caller to try. */
+/**
+ * The sliver of NIP-07 this app uses.
+ *
+ * `signEvent` is optional because it genuinely is: a sweep never calls it, and
+ * a provider that only answers `getPublicKey` is a perfectly good identity
+ * source. Only a purge reaches for it, and it fails with an explanation rather
+ * than a `TypeError` when it is not there.
+ */
 interface Nip07Provider {
   getPublicKey: () => Promise<string>;
+  signEvent?: (event: UnsignedEvent) => Promise<SignedEvent>;
 }
+
+/** What NIP-07 takes: a template plus the pubkey it will be signed as. */
+type UnsignedEvent = EventTemplate & { pubkey: string };
 
 declare global {
   interface Window {
@@ -104,4 +115,57 @@ export async function pubkeyFromExtension(): Promise<PublicIdentity> {
     throw new KeyError('extension-refused', 'The extension returned something that is not a key');
   }
   return publicIdentity(trimmed.toLowerCase());
+}
+
+/**
+ * Ask the extension to sign one event.
+ *
+ * Every call is a prompt the user has to approve, which is the point: a purge
+ * signed through an extension cannot happen without the person watching it
+ * happen. The same approval timeout applies — a walked-away user must not
+ * leave a purge half-published and spinning.
+ *
+ * What comes back is checked before it is published. An extension is trusted
+ * with the key, not with the arithmetic: a signature under a different pubkey
+ * than the one the purge is running as would be a delete request naming
+ * someone else's events, sent to thirteen hundred relays.
+ */
+export async function signWithExtension(
+  template: EventTemplate,
+  pubkey: string,
+): Promise<SignedEvent> {
+  const provider = await waitForProvider();
+  if (!provider) throw new KeyError('no-extension', 'No window.nostr provider');
+  if (typeof provider.signEvent !== 'function') {
+    throw new KeyError('extension-refused', 'This extension cannot sign — it only reads your key');
+  }
+
+  let signed: SignedEvent;
+  try {
+    signed = await Promise.race([
+      provider.signEvent({ ...template, pubkey }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new KeyError('extension-refused', 'The extension did not answer')),
+          APPROVAL_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+  } catch (err) {
+    if (err instanceof KeyError) throw err;
+    logger.key('Extension refused to sign', { error: String(err) });
+    throw new KeyError('extension-refused', 'The extension refused to sign');
+  }
+
+  if (
+    typeof signed?.id !== 'string' ||
+    typeof signed.sig !== 'string' ||
+    signed.pubkey !== pubkey
+  ) {
+    throw new KeyError(
+      'extension-refused',
+      'The extension returned something that is not an event',
+    );
+  }
+  return signed;
 }

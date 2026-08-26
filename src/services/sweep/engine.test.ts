@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KIND_SPECS } from '@/config/kinds';
+import { KIND_SPECS, OTHER_KIND } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
 import type { RelayEvent, SampleResult } from '@/services/relay/socket';
 
@@ -118,5 +118,47 @@ describe('resultFromSample', () => {
     // inventing events under someone's key produces. Found on the live
     // network during development — see the README.
     expect(result.newest?.verified).toBe(false);
+  });
+});
+
+describe('resultFromSample, for the catch-all kind', () => {
+  const other = spec(OTHER_KIND);
+
+  it('reports unknown — not zero — when the sample filled with named kinds', () => {
+    // The relay answered, and every event it sent has a column of its own. It
+    // may hold ten thousand notes behind them; the sample cannot say. Zero
+    // here would tell a user their data is gone.
+    const events = Array.from({ length: 25 }, (_, index) =>
+      event({ kind: 0, id: String(index).padStart(64, '0') }),
+    );
+    const result = resultFromSample(other, sample({ events }), query({ sampleLimit: 25 }));
+
+    expect(result.count).toBeNull();
+    expect(result.method).toBe('none');
+    expect(result.status).toBe('ok');
+  });
+
+  it('is exact when the relay served everything it had', () => {
+    // Short of the ceiling and EOSE'd: what came back is all there is, so the
+    // count of what is not a named kind is exact.
+    const result = resultFromSample(
+      other,
+      sample({ events: [event({ kind: 1 }), event({ kind: 0, id: 'd'.repeat(64) })] }),
+      query({ sampleLimit: 25 }),
+    );
+
+    expect(result.count).toBe(1);
+    expect(result.approx).toBe(false);
+    expect(result.mismatched).toBe(0);
+  });
+
+  it('is a floor when the ceiling was reached with some of it counted', () => {
+    const events = Array.from({ length: 25 }, (_, index) =>
+      event({ kind: 1, id: String(index).padStart(64, '0') }),
+    );
+    const result = resultFromSample(other, sample({ events }), query({ sampleLimit: 25 }));
+
+    expect(result.count).toBe(25);
+    expect(result.approx).toBe(true);
   });
 });

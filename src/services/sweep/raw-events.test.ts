@@ -19,7 +19,7 @@ function event(overrides: Partial<RelayEvent> = {}): RelayEvent {
 }
 
 function inspected(overrides: Partial<InspectedEvent> = {}): InspectedEvent {
-  return { event: event(), verified: true, offFilter: false, ...overrides };
+  return { event: event(), verified: true, offFilter: false, counted: true, ...overrides };
 }
 
 describe('eventsToJson', () => {
@@ -33,6 +33,7 @@ describe('eventsToJson', () => {
     expect(Array.isArray(parsed)).toBe(true);
     expect(json).not.toContain('verified');
     expect(json).not.toContain('offFilter');
+    expect(json).not.toContain('counted');
     expect((parsed as RelayEvent[])[0]).toEqual(event());
   });
 

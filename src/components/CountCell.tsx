@@ -100,7 +100,18 @@ export function CountCell({
     );
   }
 
-  const count = result.count ?? 0;
+  // No count, no refusal: the question was answered and the answer is "cannot
+  // tell" — see `cellTooltip`. A `?` rather than a `0`, for the same reason a
+  // timeout is a clock and not a zero.
+  if (result.count === null) {
+    return (
+      <div {...handlers} aria-label={label} className="text-center text-sm text-state-warning">
+        ?
+      </div>
+    );
+  }
+
+  const count = result.count;
   const change = delta?.delta ?? 0;
   /**
    * A change *from nothing* is not growth, and `+10` beside a total of 10

@@ -117,7 +117,21 @@ export function cellTooltip(
     };
   }
 
-  const count = result.count ?? 0;
+  // Answered, not refused, and still no number: the catch-all's sample filled
+  // up with kinds that have their own columns, so what is behind them is
+  // genuinely unknown. Distinct from zero, and said so.
+  if (result.count === null) {
+    return {
+      title: `${spec.label} — unknown`,
+      lines: [
+        'The relay answered, but the sample filled up with kinds that have their own columns, so how much else it holds cannot be told from it.',
+        'Raise the fetch limit under Options, or open the raw view for this relay to look directly.',
+      ],
+      tone: 'warning',
+    };
+  }
+
+  const count = result.count;
   const lines: string[] = [];
 
   if (count === 0) {

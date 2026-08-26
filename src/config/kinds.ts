@@ -13,6 +13,8 @@
  */
 
 export interface KindSpec {
+  /** The nostr kind number — or {@link OTHER_KIND} for the catch-all, which is
+   *  not a kind at all. */
   readonly kind: number;
   /** Column header. Kept to a few characters — there are six of these across
    *  a table a thousand rows tall. */
@@ -41,7 +43,27 @@ export interface KindSpec {
    * hands them out freely is the finding, not a bug in the sweep.
    */
   readonly authGated: boolean;
+  /**
+   * Not a kind: everything that is not one of the others.
+   *
+   * NIP-01 filters can say `kinds: [...]` and cannot say "anything but these",
+   * so this one is asked for as an author-only query and sorted client-side.
+   * That has consequences the rest of the code has to respect — the relay's
+   * own `COUNT` cannot answer it, and a sample that fills up with named kinds
+   * says nothing about how many others exist — so it is a flag rather than a
+   * special case buried in each caller. See `sweep/filters.ts`.
+   */
+  readonly catchAll?: boolean;
 }
+
+/**
+ * The kind number of the catch-all column.
+ *
+ * Negative on purpose: kinds are non-negative in NIP-01, so this can never
+ * collide with a real one, and any code that leaks it into a filter or a tag
+ * produces something obviously wrong rather than something plausible.
+ */
+export const OTHER_KIND = -1;
 
 /** NIP-38 status type. `general` is the free-text one; `music` carries
  *  now-playing conventions and would count a different thing entirely. */
@@ -103,9 +125,44 @@ export const KIND_SPECS: readonly KindSpec[] = [
     dTag: USER_STATUS_D,
     authGated: false,
   },
+  {
+    kind: OTHER_KIND,
+    label: 'other',
+    nip: 'any kind',
+    note: 'Everything else this person has on the relay — notes, reactions, lists, anything without a column of its own.',
+    replaceable: false,
+    addressable: false,
+    authGated: false,
+    catchAll: true,
+  },
 ];
 
+/**
+ * Everything a sweep asks by default, catch-all included.
+ *
+ * The catch-all costs a seventh subscription per relay and drops the `kinds`
+ * filter on it, which is the heaviest question here — but leaving it off by
+ * default made it invisible: the column was absent, the chip was one dim
+ * button at the end of a row, and the honest answer to "where is my data"
+ * silently excluded everything that is not one of six kinds. A tool that
+ * answers that question has to count the notes too, and switching it off is
+ * one click for anyone who wants the faster sweep.
+ */
 export const ALL_KINDS: readonly number[] = KIND_SPECS.map((spec) => spec.kind);
+
+/** The kinds that have a column of their own — everything the catch-all is
+ *  *not*, and the set it is defined by subtracting. Derived from the specs
+ *  rather than from the default selection: what the user has switched on must
+ *  never change what `other` means. */
+const NAMED_KINDS = new Set(
+  KIND_SPECS.filter((spec) => spec.catchAll !== true).map((spec) => spec.kind),
+);
+
+/** Does this kind have a column of its own? The one question the catch-all is
+ *  defined by, asked in the filters, the sweep and the purge. */
+export function isNamedKind(kind: number): boolean {
+  return NAMED_KINDS.has(kind);
+}
 
 const SPEC_BY_KIND = new Map(KIND_SPECS.map((spec) => [spec.kind, spec]));
 
@@ -116,4 +173,23 @@ export function kindSpec(kind: number): KindSpec | undefined {
 /** `30315` → `status`, for a header cell or an error line. */
 export function kindLabel(kind: number): string {
   return kindSpec(kind)?.label ?? String(kind);
+}
+
+/** What a chip prints beside the label: the kind number, or a mark for the
+ *  catch-all, which has no number to print and must not borrow `-1`. */
+export function kindCode(spec: KindSpec): string {
+  return spec.catchAll === true ? '···' : String(spec.kind);
+}
+
+/**
+ * The protocol name for a kind, said one way everywhere: `kind 4 · NIP-04`.
+ *
+ * The plain label answers "what is this", this answers "what do I search for
+ * to check it" — and it lives here because four screens show it and four
+ * hand-written formats of the same two facts is how they drift apart.
+ */
+export function kindTag(spec: KindSpec): string {
+  return spec.catchAll === true
+    ? 'any kind without a column of its own'
+    : `kind ${spec.kind} · ${spec.nip}`;
 }

@@ -11,6 +11,10 @@ An identity is required. A second mode that counted everything every relay holds
 removed: it cost the same three minutes, asked a question about relays rather than about anybody's
 data, and produced a page of numbers with nothing to do about them.
 
+Once you know where it is, you can ask for it to go: a **purge** sends signed NIP-09 delete requests
+to the relays you pick — or to every relay except the ones you pick — and reports what each of them
+said. See [Purge](#purge).
+
 The whole thing runs in the browser. There is no backend, no API key and no account: the page opens
 a socket to each relay itself, and the results are cached in IndexedDB so a repeat search paints
 instantly and can say what changed since last time.
@@ -26,14 +30,22 @@ The app needs one thing to run — a public key. It can be typed, or proved:
 | **Recovery phrase** | 12 or 24 BIP39 words, or an `nsec`            | inside the key worker, for one synchronous call |
 | **SSH key**         | an encrypted OpenSSH Ed25519 key + passphrase | inside the key worker, for one synchronous call |
 
-**This app never signs anything and never stores a key.** It sweeps relays
-anonymously, so the only thing it wants from a seed or an SSH key is the public
-half. So no function in `services/crypto/nip06.ts` returns a secret: the
-private key exists as a local, is consumed by `getPublicKey`, and is zeroed in
-a `finally` before the call returns. A caller cannot hold it, leak it into a
-React state tree, or forget to wipe it, because it is never handed over. The
-window in which a private key exists is measured in microseconds, and it closes
-before a single relay socket opens.
+**Searching never signs anything, and nothing is ever stored.** A sweep is
+anonymous, so the only thing it wants from a seed or an SSH key is the public
+half: `pubkeyFromMnemonic` keeps the private key as a local, hands it to
+`getPublicKey`, and zeroes it in a `finally` before returning. A caller cannot
+hold it, leak it into a React state tree, or forget to wipe it, because it is
+never handed over. For a user who only searches, the window in which a private
+key exists is measured in microseconds and closes before a single relay socket
+opens.
+
+**Purging signs — see [Purge](#purge).** A NIP-09 delete request
+is an event, and an event has to be signed by the identity whose data it names.
+So `secretKeyFromMnemonic` and `secretKeyFromNsec` exist, they are the only two
+functions in the app that produce a secret, and they are called from exactly
+one place: inside the key worker, from `unlock`. The main thread cannot reach
+them — `services/nostr/signer.ts` is the only door, and what comes back through
+it is a pubkey and signed events. Nothing is written to disk in either case.
 
 What cannot be wiped in place — the PEM, the passphrase, the mnemonic — are
 immutable strings that `postMessage` cloned into the worker heap. The worker is
@@ -80,9 +92,52 @@ This replaced the nostr.watch HTTP API, which no longer works: `api.nostr.watch/
 is the better source anyway — the NIP list and the AUTH flags arrive with the URL, so building the
 directory costs one subscription rather than 1,500 cross-origin fetches.
 
-Anything the monitors miss can be pasted in under **Options → Extra relays**; a pasted relay that
-the monitors already report keeps its metadata, and one nobody reports is swept with everything
-about it honestly marked unknown.
+Anything the monitors miss can be pasted in under **Options → Your own relay list**; a pasted relay
+that the monitors already report keeps its metadata, and one nobody reports is swept with everything
+about it honestly marked unknown. A relay you list by hand is never skipped for looking dead, which
+is what the stale filter does to a relay nobody asked about.
+
+That list can also be the **whole** list. The toggle under the box switches between _add to the
+tracker list_ and _check only these_, because they are two different questions: "where on the
+network is my data" takes three minutes over thirteen hundred relays, and "is my data on these four
+relays" is answered in seconds. Sweeping the network to find out about four relays was the cost
+that stopped people asking.
+
+## The `other` column
+
+The six named kinds are the question this tool was built for. `other` is
+everything else that identity has on a relay — notes, reactions, lists,
+articles, anything without a column of its own.
+
+It is **on by default**, and it is the most expensive column here: a seventh
+subscription per relay, with no `kinds` filter on it. Off by default it was
+invisible — no column, one dim chip at the end of a row — and "where did my
+data land" answered by excluding everything that is not one of six kinds is
+not an answer. Switching it off is one click when the faster sweep matters.
+
+It is heavier because NIP-01 cannot express it. A filter says `kinds: [...]`;
+there is no "anything but these". So `other` is asked as an **author-only
+query** and sorted client-side, which has three consequences the interface
+states rather than hides:
+
+- **`COUNT` cannot answer it.** A NIP-45 count over an author-only filter
+  counts the named kinds too, so the retry that turns `≥25` into `498,407` is
+  skipped for this column. Its numbers are floors far more often than the
+  others'.
+- **A full sample of named kinds means _unknown_, not zero.** If the ceiling
+  fills with profile and follow events, whatever is behind them is unseen — so
+  the cell draws `?`, not `0`. Raising the fetch limit under Options, or
+  opening the raw view, is how to see past it.
+- **A named kind coming back is not the relay misbehaving.** The request
+  carried no `kinds`, so a profile event is an honest answer that belongs to
+  another column. It is marked as such in the raw view and never counted
+  against the relay — without that rule, switching `other` on would put the
+  red "ignoring filters" mark on every relay on the network.
+
+Purging `other` works the same way and carries one extra rule: "everything
+else" is not a kind, so the delete request cannot declare it up front. The
+kinds are discovered as each relay answers and go into the request's `k` tags
+as real numbers. The column's own sentinel kind never reaches the wire.
 
 ## What a count means
 
@@ -112,6 +167,63 @@ Three rules the engine will not bend:
 In identity mode kind 4 is queried as a union of `authors` and `#p`, so "your DMs" means the ones
 you sent _and_ the ones addressed to you, counted once each.
 
+## Purge
+
+The other half of "where did my data land" is "get it off there". A purge sends
+**NIP-09 delete requests** (kind 5) to the relays you choose, for the kinds you
+choose, and reports what each relay said.
+
+Nothing about it is implicit:
+
+- **It is behind a mode.** `Purge…` in the filter bar turns on purge mode; only then does the grid
+  grow a tick column. A permanent delete checkbox on every row is a deletion one misclick away.
+- **Targets are ticked, and the ticks mean whichever way round you say.** _only ticked_ purges the
+  relays you tick; _all except ticked_ purges everything the current sweep covers except those —
+  which is how "clear it everywhere but my own relays" stays a two-click operation rather than nine
+  hundred ticks. The count beside the switch always names the relays that will be written to.
+- **Ticks are a selection, not a view.** They survive paging, filtering, sorting and a re-check, and
+  select-all adds the rows the filter bar currently matches rather than replacing what is already
+  ticked. Ticks the filters hide are counted on the bar — a selection nobody can see is one nobody
+  can check.
+- **It reads before it writes.** Every target is asked what it holds for the chosen kinds, ids are
+  unioned across all of them, and **one** set of requests is signed and sent to every relay. That is
+  one approval prompt per chunk instead of one per relay, and it means a relay quietly holding a
+  copy this app only found elsewhere still gets that event's id.
+- **Only your own events are named.** A relay honours a deletion from the key that wrote the event
+  and from nobody else, so the gather filters on `authors` alone — never the `#p` half of the DM
+  union the sweep uses. Messages other people sent you are nobody's to delete but theirs.
+- **Replaceable kinds also go by address.** An `a` tag (`kind:pubkey:d`) covers the copies this app
+  was never served, including one written between the read and the request landing. Ticked
+  individual events never get one: "delete this status" must not become "delete every status I have
+  ever set".
+- **A typed word, not a click.** `PURGE`, into a box, on a screen that names the identity, the
+  relay count and the kinds first.
+
+### What it does not claim
+
+`OK true` means a relay **accepted** the request. NIP-09 does not oblige it to honour one, and this
+app never prints "deleted". Three outcomes, three words: accepted, refused, and no answer — and the
+third is not a failure but the absence of one, which is the same rule the sweep is built on. Copies
+on relays outside the target list are untouched, and the screen says so. The only way to find out
+what actually happened is to check again, which the dialog offers as a button.
+
+### Signing
+
+| Signer                    | Where the key is      | For how long                       |
+| ------------------------- | --------------------- | ---------------------------------- |
+| **Extension** (NIP-07)    | never in this app     | never — one approval per request   |
+| **Recovery phrase / SSH** | inside its own worker | until the purge ends, then dropped |
+
+The key signer runs in a **separate worker** from the one identity import uses, which is terminated
+after every derivation and would otherwise take a live signing session with it. It is terminated —
+key and all — when the purge finishes, when the panel closes, and when a different key is chosen.
+
+A signer whose pubkey is not the identity on screen is refused before a socket opens: a delete
+request signed by the wrong key deletes nothing and puts that key on record having tried.
+
+Single events can also be deleted from the raw-JSON view of one relay: tick the ones you want, and
+the request names those ids, on that relay, and nothing wider.
+
 ## Measurements
 
 Everything in `src/config/sweep.ts` is a claim about the real network. Re-measure with:
@@ -134,6 +246,9 @@ August 2026, from a residential connection:
 | Relays demanding AUTH for some kind       | 86                                                          |
 | Relays returning off-filter events        | 4                                                           |
 | NIP-45 `COUNT` answered                   | 49% of kind-queries (3,323 of 6,798 after the sample retry) |
+
+Every sweep timing above was taken at 48 concurrent sockets. The shipped default is 4 — gentler on
+the network, and slower in proportion; the concurrency slider under Options goes back up to 96.
 
 The connect timeout is the number to be careful with. At 4s a full in-browser sweep called **275
 of 1,339 relays unreachable**; at 9s the same sweep called **38** unreachable, matching what Node
@@ -194,7 +309,8 @@ src/
     relay/      URL canonicalisation; a minimal hand-rolled NIP-01 socket client
     discovery/  NIP-66 parsing and directory assembly
     sweep/      filters, engine, diff, result types
-    nostr/      npub/nprofile parsing, NIP-07 extension, the key-import facade
+    purge/      NIP-09 request building, target resolution, the purge engine
+    nostr/      npub/nprofile parsing, NIP-07 extension, key import, the signer facade
     crypto/     NIP-06 derivation — returns public keys only, by construction
     ssh/        OpenSSH Ed25519 import (ported from `chat`, with its vectors)
     worker/     the key worker: every blocking derivation, terminated after use
