@@ -216,7 +216,18 @@ what actually happened is to check again, which the dialog offers as a button.
 
 The key signer runs in a **separate worker** from the one identity import uses, which is terminated
 after every derivation and would otherwise take a live signing session with it. It is terminated —
-key and all — when the purge finishes, when the panel closes, and when a different key is chosen.
+key and all — when the purge finishes, when purge mode is left, when a different key is chosen,
+when the raw-JSON view that unlocked it closes, and when the identity on screen changes. Every
+route that can unlock a key has one that ends it.
+
+**What the signer returns is checked before anything publishes it.** `window.nostr` is injected by
+software this app does not control and is handed your key, so its answer is treated the way a
+relay's is — untrusted until verified. `services/nostr/signer.ts` is the one door every signature
+passes through, and it refuses an event that is not the template it was shown (kind, timestamp,
+content and tags compared field by field), a signature that does not verify, and any kind other
+than 5: a purge is the only thing here that signs, and that is enforced rather than assumed. The
+verification runs against a plain copy of the event's own fields, because `nostr-tools` caches its
+verdict on the object it checks and an object arriving pre-marked would skip the check entirely.
 
 A signer whose pubkey is not the identity on screen is refused before a socket opens: a delete
 request signed by the wrong key deletes nothing and puts that key on record having tried.

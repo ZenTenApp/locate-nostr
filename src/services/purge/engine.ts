@@ -57,6 +57,17 @@ export type PurgePhase = 'gathering' | 'signing' | 'publishing' | 'done';
 
 /** How a relay's part of the purge ended. */
 export type PurgeRelayStatus =
+  /**
+   * Nothing was sent to this relay — the starting state, and the honest one
+   * for a relay that has only been read from so far.
+   *
+   * Its own status because the alternative was seeding reports with
+   * `unanswered`, which the screen renders as "the request was sent and the
+   * relay never acknowledged it". During the gather that sentence was on
+   * screen for every relay before a single request existed, and on a purge
+   * that found nothing it sat under a banner saying nothing had been sent.
+   */
+  | 'unsent'
   /** Every request sent was accepted. */
   | 'accepted'
   /** Some accepted, some not — mixed answers from one relay. */
@@ -115,7 +126,7 @@ function blankReport(url: string): PurgeRelayReport {
     rejected: 0,
     unanswered: 0,
     notes: [],
-    status: 'unanswered',
+    status: 'unsent',
     error: null,
   };
 }
@@ -130,7 +141,7 @@ function blankReport(url: string): PurgeRelayReport {
 function authoredFilter(spec: KindSpec, author: string): RelayFilter {
   // The catch-all has no `kinds` to send — NIP-01 cannot express "anything but
   // these" — so it asks for the author's events and sorts them here.
-  if (spec.catchAll === true) return { authors: [author] };
+  if (spec.catchAll) return { authors: [author] };
 
   const filter: RelayFilter = { kinds: [spec.kind], authors: [author] };
   if (spec.dTag !== undefined) filter['#d'] = [spec.dTag];
@@ -148,7 +159,7 @@ function authoredFilter(spec: KindSpec, author: string): RelayFilter {
  */
 function deletable(event: RelayEvent, spec: KindSpec, author: string): boolean {
   if (event.pubkey !== author) return false;
-  if (spec.catchAll === true) return !isNamedKind(event.kind);
+  if (spec.catchAll) return !isNamedKind(event.kind);
   if (event.kind !== spec.kind) return false;
   if (spec.dTag === undefined) return true;
   return (event.tags.find((tag) => tag[0] === 'd')?.[1] ?? '') === spec.dTag;
@@ -271,12 +282,16 @@ function recordAck(report: PurgeRelayReport, ack: PublishAck | null): void {
   if (ack.message !== '' && !report.notes.includes(ack.message)) report.notes.push(ack.message);
 }
 
-/** Which of the three publish outcomes a relay's answers add up to. */
+/** Which outcome a relay's answers add up to. */
 function statusFor(report: PurgeRelayReport): PurgeRelayStatus {
   if (report.accepted > 0 && report.rejected === 0 && report.unanswered === 0) return 'accepted';
   if (report.accepted > 0) return 'partial';
   if (report.rejected > 0) return 'refused';
-  return 'unanswered';
+  if (report.unanswered > 0) return 'unanswered';
+  // Counted nothing at all: a cancel landed before this relay was asked, so
+  // no request left the process and "no answer" would be a claim about a
+  // question nobody put.
+  return 'unsent';
 }
 
 /** Send every signed request to one relay and record what it said. */
@@ -437,10 +452,25 @@ export async function purgeEvents(
   let socket: RelaySocket | null = null;
   try {
     const requests: SignedEvent[] = [];
-    for (const template of templates) requests.push(await signer.sign(template));
+    for (const template of templates) {
+      // Checked between signatures as the bulk purge is: an extension shows a
+      // prompt per request, and a cancel has to mean the next one is never
+      // asked for.
+      if (signal?.aborted === true) break;
+      requests.push(await signer.sign(template));
+    }
 
-    socket = await RelaySocket.open(relayUrl, CONNECT_TIMEOUT_MS, signal);
+    // Opening is its own step, so a relay nobody can reach is reported with
+    // the same word the bulk purge uses for it. Both screens read from one
+    // table; they must not describe the identical failure two ways.
+    try {
+      socket = await RelaySocket.open(relayUrl, CONNECT_TIMEOUT_MS, signal);
+    } catch (err) {
+      return { ...report, status: 'unreachable', error: errorMessage(err) };
+    }
+
     for (const request of requests) {
+      if (signal?.aborted === true) break;
       recordAck(report, await socket.publish(request, PUBLISH_TIMEOUT_MS));
     }
     report.status = statusFor(report);

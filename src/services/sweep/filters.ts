@@ -25,7 +25,7 @@ export function filtersFor(spec: KindSpec, author: string): RelayFilter[] {
   // these". So the relay is asked for the author's events with no kind
   // restriction at all, and the named kinds are dropped on arrival — which is
   // why its count is a floor far more often than the others'.
-  if (spec.catchAll === true) return [{ authors: [author] }];
+  if (spec.catchAll) return [{ authors: [author] }];
 
   const base: RelayFilter = { kinds: [spec.kind] };
   if (spec.dTag !== undefined) base['#d'] = [spec.dTag];
@@ -40,7 +40,7 @@ export function filtersFor(spec: KindSpec, author: string): RelayFilter[] {
 
 /** Does this event belong in this kind's column? */
 export function eventMatches(event: RelayEvent, spec: KindSpec, author: string): boolean {
-  if (spec.catchAll === true) return event.pubkey === author && !isNamedKind(event.kind);
+  if (spec.catchAll) return event.pubkey === author && !isNamedKind(event.kind);
   if (event.kind !== spec.kind) return false;
 
   if (spec.dTag !== undefined) {
@@ -63,7 +63,7 @@ export function eventMatches(event: RelayEvent, spec: KindSpec, author: string):
  * honest relay on the network the moment `other` is switched on.
  */
 export function filterHonoured(event: RelayEvent, spec: KindSpec, author: string): boolean {
-  if (spec.catchAll === true) return event.pubkey === author;
+  if (spec.catchAll) return event.pubkey === author;
   return eventMatches(event, spec, author);
 }
 

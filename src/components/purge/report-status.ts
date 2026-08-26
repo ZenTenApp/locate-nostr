@@ -28,6 +28,13 @@ export interface ReportStatusCopy {
 }
 
 export const REPORT_STATUS: Record<PurgeRelayStatus, ReportStatusCopy> = {
+  unsent: {
+    tone: 'neutral',
+    label: 'not asked',
+    title:
+      'No delete request has been sent to this relay — so far it has only been read, to work out what it holds.',
+    sentence: 'was never sent the request',
+  },
   accepted: {
     tone: 'success',
     label: 'accepted',

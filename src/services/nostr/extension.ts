@@ -125,10 +125,13 @@ export async function pubkeyFromExtension(): Promise<PublicIdentity> {
  * happen. The same approval timeout applies — a walked-away user must not
  * leave a purge half-published and spinning.
  *
- * What comes back is checked before it is published. An extension is trusted
- * with the key, not with the arithmetic: a signature under a different pubkey
- * than the one the purge is running as would be a delete request naming
- * someone else's events, sent to thirteen hundred relays.
+ * What comes back gets a shape check here — enough to fail with a sentence
+ * rather than a `TypeError` two frames later. It is **not** the real check:
+ * whether the extension signed the event it was shown, under the right key,
+ * with a signature that verifies, is decided in `services/nostr/signer.ts`,
+ * which is the one door every signature passes through. Doing half of it here
+ * as well would leave two places to keep in step and neither claiming to be
+ * the authority.
  */
 export async function signWithExtension(
   template: EventTemplate,
@@ -157,11 +160,7 @@ export async function signWithExtension(
     throw new KeyError('extension-refused', 'The extension refused to sign');
   }
 
-  if (
-    typeof signed?.id !== 'string' ||
-    typeof signed.sig !== 'string' ||
-    signed.pubkey !== pubkey
-  ) {
+  if (typeof signed?.id !== 'string' || typeof signed.sig !== 'string') {
     throw new KeyError(
       'extension-refused',
       'The extension returned something that is not an event',

@@ -15,10 +15,9 @@ import { KIND_SPECS, kindCode, kindTag } from '@/config/kinds';
 import { DISCOVERY_RELAYS, SAMPLE_LIMIT_CHOICES, SWEEP_CONCURRENCY_RANGE } from '@/config/sweep';
 import { compactCount, since } from '@/lib/format';
 import { shortIdentity } from '@/services/nostr/identity';
-import { hasNostrExtension } from '@/services/nostr/extension';
+import { hasNostrExtension, pubkeyFromExtension } from '@/services/nostr/extension';
 import { KEY_ERROR_TEXT, keyErrorCode } from '@/lib/errors';
 import type { PublicIdentity } from '@/services/crypto/nip06';
-import { pubkeyFromExtension } from '@/services/nostr/key-import';
 import type { IdentitySource } from '@/services/nostr/key-import';
 import { KeyImportDialog } from '@/components/identity/KeyImportDialog';
 import { tooltipHandlers } from '@/components/ui/tooltip-handlers';
@@ -162,6 +161,14 @@ export function QueryPanel(props: QueryPanelProps) {
     if (next.length > 0) props.onChange({ kinds: next });
   };
 
+  // What is actually being looked for, read off the chips rather than written
+  // out. The sentence used to name four kinds in prose while the chips below
+  // it toggled seven — untick messages and it still claimed to be searching
+  // them, and `other` never appeared at all.
+  const lookingFor = KIND_SPECS.filter((spec) => props.kinds.includes(spec.kind))
+    .map((spec) => spec.label)
+    .join(', ');
+
   // No identity, no run. There is nothing sensible to look for "for nobody",
   // and an empty box used to mean "everything on every relay" — three minutes
   // of work answering a question the user had not asked.
@@ -250,8 +257,7 @@ export function QueryPanel(props: QueryPanelProps) {
         {props.author !== null && props.authorNpub !== null && (
           <>
             <span>
-              Looking for {shortIdentity(props.authorNpub)}&rsquo;s profile, follows, messages and
-              relay lists
+              Looking for {shortIdentity(props.authorNpub)}&rsquo;s {lookingFor}
               {props.authorSource !== null && ` · ${SOURCE_LABEL[props.authorSource]}`}
             </span>
             <Button variant="ghost" className="px-sm py-0" onClick={props.onClearIdentity}>

@@ -53,7 +53,7 @@ export interface KindSpec {
    * says nothing about how many others exist — so it is a flag rather than a
    * special case buried in each caller. See `sweep/filters.ts`.
    */
-  readonly catchAll?: boolean;
+  readonly catchAll: boolean;
 }
 
 /**
@@ -78,6 +78,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     replaceable: true,
     addressable: false,
     authGated: false,
+    catchAll: false,
   },
   {
     kind: 3,
@@ -87,6 +88,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     replaceable: true,
     addressable: false,
     authGated: false,
+    catchAll: false,
   },
   {
     kind: 4,
@@ -96,6 +98,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     replaceable: false,
     addressable: false,
     authGated: true,
+    catchAll: false,
   },
   {
     kind: 10002,
@@ -105,6 +108,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     replaceable: true,
     addressable: false,
     authGated: false,
+    catchAll: false,
   },
   {
     kind: 10050,
@@ -114,6 +118,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     replaceable: true,
     addressable: false,
     authGated: false,
+    catchAll: false,
   },
   {
     kind: 30315,
@@ -124,6 +129,7 @@ export const KIND_SPECS: readonly KindSpec[] = [
     addressable: true,
     dTag: USER_STATUS_D,
     authGated: false,
+    catchAll: false,
   },
   {
     kind: OTHER_KIND,
@@ -154,9 +160,7 @@ export const ALL_KINDS: readonly number[] = KIND_SPECS.map((spec) => spec.kind);
  *  *not*, and the set it is defined by subtracting. Derived from the specs
  *  rather than from the default selection: what the user has switched on must
  *  never change what `other` means. */
-const NAMED_KINDS = new Set(
-  KIND_SPECS.filter((spec) => spec.catchAll !== true).map((spec) => spec.kind),
-);
+const NAMED_KINDS = new Set(KIND_SPECS.filter((spec) => !spec.catchAll).map((spec) => spec.kind));
 
 /** Does this kind have a column of its own? The one question the catch-all is
  *  defined by, asked in the filters, the sweep and the purge. */
@@ -170,15 +174,10 @@ export function kindSpec(kind: number): KindSpec | undefined {
   return SPEC_BY_KIND.get(kind);
 }
 
-/** `30315` → `status`, for a header cell or an error line. */
-export function kindLabel(kind: number): string {
-  return kindSpec(kind)?.label ?? String(kind);
-}
-
 /** What a chip prints beside the label: the kind number, or a mark for the
  *  catch-all, which has no number to print and must not borrow `-1`. */
 export function kindCode(spec: KindSpec): string {
-  return spec.catchAll === true ? '···' : String(spec.kind);
+  return spec.catchAll ? '···' : String(spec.kind);
 }
 
 /**
@@ -189,7 +188,5 @@ export function kindCode(spec: KindSpec): string {
  * hand-written formats of the same two facts is how they drift apart.
  */
 export function kindTag(spec: KindSpec): string {
-  return spec.catchAll === true
-    ? 'any kind without a column of its own'
-    : `kind ${spec.kind} · ${spec.nip}`;
+  return spec.catchAll ? 'any kind without a column of its own' : `kind ${spec.kind} · ${spec.nip}`;
 }

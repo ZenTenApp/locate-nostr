@@ -56,8 +56,8 @@ export function App() {
   // Read off the store imperatively: subscribing to the signer here would
   // re-render the whole page on every purge report.
   useEffect(() => {
-    const purge = usePurgeStore.getState();
-    if (purge.signer !== null) purge.forgetSigner();
+    const state = usePurgeStore.getState();
+    if (state.signer !== null) state.forgetSigner();
   }, [store.author]);
 
   // A change of question makes the grid show that question's last answer,

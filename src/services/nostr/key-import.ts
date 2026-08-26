@@ -1,14 +1,17 @@
 /**
- * The three ways in, behind one API.
+ * The two ways in that involve a secret.
  *
- * Each source ends at the same place — a hex pubkey — and each one is a
- * different bargain about where the private key lives while that happens:
+ * Both end at the same place — a hex pubkey — and both make the same bargain
+ * about where the private key lives while that happens:
  *
  * | Source    | Where the secret is       | For how long                |
  * | --------- | ------------------------- | --------------------------- |
- * | extension | never in this app         | never                       |
  * | seed      | inside the key worker     | one synchronous call        |
  * | ssh key   | inside the key worker     | one synchronous call        |
+ *
+ * The third way in, a NIP-07 extension, has no secret to place and lives in
+ * `nostr/extension.ts`. It used to be re-exported from here so callers had
+ * one import path; that bought nothing but a second name for one function.
  *
  * The worker is terminated after every derivation, successful or not. That is
  * not tidiness: the PEM, the passphrase and the mnemonic are immutable strings
@@ -19,7 +22,6 @@
 import { logger } from '@/lib/logger';
 import type { PublicIdentity } from '@/services/crypto/nip06';
 import { pubkeyFromNsec } from '@/services/crypto/nip06';
-import { pubkeyFromExtension } from '@/services/nostr/extension';
 import { parseOpenSSHPrivateKey } from '@/services/ssh/openssh';
 import { keyWorker } from '@/services/worker/client';
 
@@ -105,5 +107,3 @@ export function pubkeyFromSeed(secret: string, passphrase: string): Promise<Publ
   logger.key('Deriving from a recovery phrase');
   return throughWorker(keyWorker.request('seed-pubkey', { mnemonic: trimmed, passphrase }));
 }
-
-export { pubkeyFromExtension };

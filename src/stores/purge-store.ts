@@ -11,10 +11,10 @@
  * The signer lives here — the object, never a key. An extension signer holds
  * nothing; a key signer is a handle on a worker that holds the key on its own
  * side of a `postMessage` boundary. {@link PurgeState.forgetSigner} terminates
- * that worker, which is the only way the key actually goes away, and four
- * things call it: leaving purge mode, finishing a purge, choosing a different
- * key, and — from outside this store — closing the raw-events dialog or
- * changing identity. Every route that can unlock a key has one that ends it.
+ * that worker, which is the only way the key actually goes away. Three things
+ * here call it — leaving purge mode, finishing a purge, choosing a different
+ * key — and two outside do: closing the raw-events dialog, and changing
+ * identity. Every route that can unlock a key has one that ends it.
  */
 import { create } from 'zustand';
 

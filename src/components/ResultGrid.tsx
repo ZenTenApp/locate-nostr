@@ -97,14 +97,14 @@ function EmptyState({
   );
 }
 
-/** Column widths, in one place: the header and every row build their grid
- *  template from this, so they cannot drift apart. The tick column exists
- *  only in purge mode — a permanent delete checkbox on every row is a delete
- *  one misclick away. */
 /** How close to the end of the list counts as "the end", in pixels. Roughly a
  *  screen, so the next page is drawn before the user reaches the bottom. */
 const LOAD_AHEAD_PX = 600;
 
+/** Column widths, in one place: the header and every row build their grid
+ *  template from this, so they cannot drift apart. The tick column exists
+ *  only in purge mode — a permanent delete checkbox on every row is a delete
+ *  one misclick away. */
 function templateFor(kinds: readonly KindSpec[], picking: boolean): string {
   // Wide enough for `≥1.2k` plus the delta that sits under it on a re-check;
   // narrower and the two overlap on exactly the rows worth reading.

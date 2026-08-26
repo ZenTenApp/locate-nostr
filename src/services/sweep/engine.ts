@@ -106,7 +106,7 @@ export function resultFromSample(
   // The catch-all asked for everything and sorted client-side, so a full
   // sample carrying none of it says nothing: the ceiling may have been filled
   // by the kinds that have their own columns, with the others behind them.
-  if (spec.catchAll === true && matched.length === 0 && approx) return unknown();
+  if (spec.catchAll && matched.length === 0 && approx) return unknown();
 
   // Nothing arrived and the relay never said it was finished. That is not a
   // count of zero: `≥0` is what an unanswered question looks like when a floor
@@ -171,7 +171,7 @@ async function sweepKind(
   // Never for the catch-all: `COUNT` over its filter counts the author's whole
   // output on that relay, named kinds included, and would report a total for
   // "everything else" that is larger than everything else.
-  if (spec.catchAll !== true && result.approx && result.count !== null && result.count > 0) {
+  if (!spec.catchAll && result.approx && result.count !== null && result.count > 0) {
     const exact = await socket.count(filters, COUNT_TIMEOUT_MS);
     if (exact !== null && exact >= result.count) {
       return { ...result, count: exact, approx: false, method: 'count' };

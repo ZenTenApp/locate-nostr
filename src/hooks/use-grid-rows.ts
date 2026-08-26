@@ -128,36 +128,34 @@ export function buildRows(
   baseline: Map<string, RelayResult>,
   filters: GridFilters,
 ): { rows: GridRow[]; total: number } {
-  {
-    const all: GridRow[] = relays.map((relay) => {
-      const result = results.get(relay.url);
-      return {
-        relay,
-        result,
-        diff: result && baseline.size > 0 ? diffRelay(baseline.get(relay.url), result) : null,
-      };
-    });
+  const all: GridRow[] = relays.map((relay) => {
+    const result = results.get(relay.url);
+    return {
+      relay,
+      result,
+      diff: result && baseline.size > 0 ? diffRelay(baseline.get(relay.url), result) : null,
+    };
+  });
 
-    const rows = all.filter((row) => {
-      if (!matchesText(row, filters.text)) return false;
-      if (filters.answeredOnly && row.result?.status !== 'ok') return false;
-      if (filters.carryingOnly && (row.result?.hits ?? 0) === 0) return false;
-      if (filters.hideGated && isGated(row)) return false;
-      if (filters.changedOnly && (row.diff === null || row.diff.change === 'same')) return false;
-      if (filters.kind !== null) {
-        const kindResult = row.result?.kinds[filters.kind];
-        if (!kindResult || (kindResult.count ?? 0) === 0) return false;
-      }
-      return true;
-    });
+  const rows = all.filter((row) => {
+    if (!matchesText(row, filters.text)) return false;
+    if (filters.answeredOnly && row.result?.status !== 'ok') return false;
+    if (filters.carryingOnly && (row.result?.hits ?? 0) === 0) return false;
+    if (filters.hideGated && isGated(row)) return false;
+    if (filters.changedOnly && (row.diff === null || row.diff.change === 'same')) return false;
+    if (filters.kind !== null) {
+      const kindResult = row.result?.kinds[filters.kind];
+      if (!kindResult || (kindResult.count ?? 0) === 0) return false;
+    }
+    return true;
+  });
 
-    rows.sort((a, b) => {
-      const ordered = compare(a, b, filters.sort);
-      return filters.descending ? -ordered : ordered;
-    });
+  rows.sort((a, b) => {
+    const ordered = compare(a, b, filters.sort);
+    return filters.descending ? -ordered : ordered;
+  });
 
-    return { rows, total: all.length };
-  }
+  return { rows, total: all.length };
 }
 
 /** {@link buildRows}, memoised. It runs on every keystroke in the filter box

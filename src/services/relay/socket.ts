@@ -396,23 +396,31 @@ export class RelaySocket {
     }
   }
 
+  /**
+   * Settle everything a dropped socket left in flight, as "no answer".
+   *
+   * `null` for both counts and publishes, and the reason is the same in each
+   * case: nobody knows. A `COUNT` that never arrived is not a zero, and a
+   * publish whose socket died is not a refusal — the relay may well have
+   * stored the event before the connection went.
+   */
+  private static abandonPending(
+    pending: Map<string, { timer: ReturnType<typeof setTimeout>; settle: (value: null) => void }>,
+  ): void {
+    for (const entry of pending.values()) {
+      clearTimeout(entry.timer);
+      entry.settle(null);
+    }
+    pending.clear();
+  }
+
   private abandonAll(reason: CloseReason): void {
-    for (const [, sub] of this.subs) {
+    for (const sub of this.subs.values()) {
       clearTimeout(sub.timer);
       sub.settle({ events: sub.events, complete: false, refusal: reason });
     }
     this.subs.clear();
-    for (const [, pending] of this.counts) {
-      clearTimeout(pending.timer);
-      pending.settle(null);
-    }
-    this.counts.clear();
-    // A publish whose socket died is unknown, not refused: the relay may well
-    // have stored the event before the connection dropped.
-    for (const [, pending] of this.publishes) {
-      clearTimeout(pending.timer);
-      pending.settle(null);
-    }
-    this.publishes.clear();
+    RelaySocket.abandonPending(this.counts);
+    RelaySocket.abandonPending(this.publishes);
   }
 }

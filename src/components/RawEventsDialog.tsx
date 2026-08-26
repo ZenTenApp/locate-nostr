@@ -168,9 +168,17 @@ export function RawEventsDialog({
     setDeleting(true);
     setDeleteError(null);
     try {
-      setReport(
-        await purgeEvents(relayUrl, { author, kinds: [spec.kind], reason }, [...picked], signer),
-      );
+      // The kinds of the ticked events, not the column's: under `other` the
+      // column has no kind of its own, and a delete request declares what it
+      // actually names.
+      const kinds = [
+        ...new Set(
+          (result?.events ?? [])
+            .filter((entry) => picked.has(entry.event.id))
+            .map((entry) => entry.event.kind),
+        ),
+      ];
+      setReport(await purgeEvents(relayUrl, { author, kinds, reason }, [...picked], signer));
       setReloads((count) => count + 1);
     } catch (err) {
       setDeleteError(errorMessage(err));

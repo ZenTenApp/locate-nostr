@@ -14,7 +14,8 @@ import type { RelayDescriptor } from '@/services/discovery/nip66';
 import type { EventTemplate, SignedEvent } from '@/services/nostr/events';
 import type { Signer } from '@/services/nostr/signer';
 
-import { runPurge } from './engine';
+import { purgeEvents, runPurge } from './engine';
+import type { PurgePhase } from './engine';
 
 const AUTHOR = 'a'.repeat(64);
 const STRANGER = 'b'.repeat(64);
@@ -235,6 +236,36 @@ describe('runPurge', () => {
     expect(key.signed[0]?.tags).toContainEqual(['a', `0:${AUTHOR}:`]);
   });
 
+  it('says a relay was never asked while it is only being read', async () => {
+    // The gather reports each relay as it finishes, long before anything is
+    // signed. Seeding those reports as "no answer" put "the request was sent
+    // and the relay never acknowledged it" on screen for a request that did
+    // not exist — the exact over-claim this app is built to refuse.
+    vi.stubGlobal('WebSocket', FakeRelay);
+    relayBehaviour.events = [event('1'.repeat(64), AUTHOR, 0)];
+
+    const duringGather: string[] = [];
+    let phase: PurgePhase | null = null;
+    await runPurge(
+      [relay('wss://one.example')],
+      { author: AUTHOR, kinds: [0], reason: 'because' },
+      signer(),
+      { concurrency: 1, signal: new AbortController().signal },
+      {
+        onPhase: (next) => {
+          phase = next;
+        },
+        onRelay: (report) => {
+          if (phase === 'gathering') duringGather.push(report.status);
+        },
+        onProgress: () => undefined,
+      },
+      NOW,
+    );
+
+    expect(duringGather).toEqual(['unsent']);
+  });
+
   it('refuses to sign as anyone but the identity being purged', async () => {
     vi.stubGlobal('WebSocket', FakeRelay);
     await expect(purge([relay('wss://one.example')], signer(STRANGER))).rejects.toThrow(
@@ -285,5 +316,104 @@ describe('runPurge', () => {
 
     expect(key.signed).toHaveLength(0);
     expect(outcome.requests).toBe(0);
+  });
+});
+
+/**
+ * The hand-picked path: one relay, the ids the user ticked, no gather.
+ *
+ * The same protocol act as a bulk purge and, until now, the only one of the
+ * two with no test — which is how it came to describe an unreachable relay
+ * with a different word than the screen beside it.
+ */
+describe('purgeEvents', () => {
+  const ID = '1'.repeat(64);
+
+  function pick(key: Signer, ids: readonly string[] = [ID], kinds = [1]) {
+    return purgeEvents(
+      'wss://one.example',
+      { author: AUTHOR, kinds, reason: 'because' },
+      ids,
+      key,
+      undefined,
+      NOW,
+    );
+  }
+
+  it('names the ticked ids and nothing wider', async () => {
+    vi.stubGlobal('WebSocket', FakeRelay);
+    const key = signer();
+
+    const report = await pick(key);
+
+    const tags = key.signed[0]?.tags ?? [];
+    expect(tags.filter((tag) => tag[0] === 'e')).toEqual([['e', ID]]);
+    // Kind 1 is not replaceable, but the rule is the point: ticking one event
+    // must never become "delete every event of its kind".
+    expect(tags.some((tag) => tag[0] === 'a')).toBe(false);
+    expect(report.status).toBe('accepted');
+    expect(report.found).toBe(1);
+  });
+
+  it('declares the kinds it was told about, never the grid’s sentinel', async () => {
+    vi.stubGlobal('WebSocket', FakeRelay);
+    const key = signer();
+
+    await pick(key, [ID], [OTHER_KIND, 7]);
+
+    const tags = key.signed[0]?.tags ?? [];
+    expect(tags.filter((tag) => tag[0] === 'k')).toEqual([['k', '7']]);
+  });
+
+  it('calls an unreachable relay unreachable, as the bulk purge does', async () => {
+    // The two screens share one table of words. The same failure described
+    // two ways is the bug this pins.
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        onopen: ((event: unknown) => void) | null = null;
+        onclose: ((event: unknown) => void) | null = null;
+        onerror: ((event: unknown) => void) | null = null;
+        onmessage: ((event: unknown) => void) | null = null;
+        readyState = 0;
+        constructor() {
+          setTimeout(() => this.onerror?.({}), 0);
+        }
+        send(): void {}
+        close(): void {}
+      },
+    );
+
+    const report = await pick(signer());
+
+    expect(report.status).toBe('unreachable');
+    expect(report.error).not.toBeNull();
+  });
+
+  it('refuses to sign as anyone but the identity being purged', async () => {
+    vi.stubGlobal('WebSocket', FakeRelay);
+    await expect(pick(signer(STRANGER))).rejects.toThrow(/not the identity being purged/);
+    expect(relayBehaviour.published.size).toBe(0);
+  });
+
+  it('stops signing and sending once cancelled', async () => {
+    vi.stubGlobal('WebSocket', FakeRelay);
+    const key = signer();
+    const controller = new AbortController();
+    controller.abort();
+
+    const report = await purgeEvents(
+      'wss://one.example',
+      { author: AUTHOR, kinds: [1], reason: 'because' },
+      [ID],
+      key,
+      controller.signal,
+      NOW,
+    );
+
+    // Nothing signed, nothing published, and the report says the relay was
+    // never asked rather than that it stayed silent.
+    expect(key.signed).toHaveLength(0);
+    expect(report.status).toBe('unsent');
   });
 });
