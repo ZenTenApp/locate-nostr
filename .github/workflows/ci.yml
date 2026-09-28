@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # A vX.Y.Z tag builds the APK, signs it with a key derived from PAKSTR_NSEC
+  # and publishes it to Zapstore. pakstr reads the version from the tag, so the
+  # tag and package.json must agree or the store and the app disagree.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match package.json version $pkg"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run build
+      - name: Build, sign and publish APK
+        env:
+          PAKSTR_NSEC: ${{ secrets.PAKSTR_NSEC }}
+        run: npx pakstr run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apk
+          path: build/*.apk
+          if-no-files-found: ignore

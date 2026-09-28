@@ -5,3 +5,7 @@ dist-ssr
 .DS_Store
 .vite
 coverage
+
+# pakstr
+.env
+build

@@ -1,0 +1,9 @@
+# Zapstore publisher whitelist: the relay reads this file from the public repo
+# to confirm the npub publishing releases is allowed to speak for it.
+
+repository: https://github.com/ZenTenApp/locate-nostr
+# pubkey: npub1...               # the npub of PAKSTR_NSEC (or PAKSTR_PUBLISH_NSEC)
+
+name: Locate
+summary: Find which Nostr relays hold your events, and purge them.
+tags: [nostr, relays, search]
