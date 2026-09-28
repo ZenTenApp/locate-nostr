@@ -2,7 +2,7 @@
 # to confirm the npub publishing releases is allowed to speak for it.
 
 repository: https://github.com/ZenTenApp/locate-nostr
-# pubkey: npub1...               # the npub of PAKSTR_NSEC (or PAKSTR_PUBLISH_NSEC)
+pubkey: npub1yywvl2yersng833m2xcd06y4e3j3jjpnjk5j3a3t02jg3nsul4wqy4gy4q  # must match PAKSTR_NSEC
 
 name: Locate
 summary: Find which Nostr relays hold your events, and purge them.
