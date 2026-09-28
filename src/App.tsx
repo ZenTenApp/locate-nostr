@@ -195,7 +195,11 @@ export function App() {
       {/* On a phone this is the title bar: pinned while the page scrolls under
           it, with the menu that holds what the page has no room for. */}
       <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-md gap-y-xs border-b border-surface-border bg-surface-panel px-lg py-sm md:static md:items-baseline md:bg-surface-base md:py-md">
-        <h1 className="text-lg font-semibold md:text-xl">Nostr Locate</h1>
+        <h1 className="flex items-center gap-sm self-center text-lg font-semibold md:text-xl">
+          {/* Decorative: the name beside it already says what the app is. */}
+          <img src="/favicon.png" alt="" className="h-6 w-6 rounded-sm" />
+          NostrBox Locate
+        </h1>
         <p className="hidden text-sm text-ink-muted md:block">
           Find out which relays actually hold your data — or anyone&rsquo;s.
         </p>

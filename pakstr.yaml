@@ -7,11 +7,14 @@
 
 app:
   appId: com.nostrdev.nostrlocate
-  appName: Nostr Locate
+  appName: NostrBox Locate
   versionName: auto              # from the vX.Y.Z tag on HEAD (the release workflow's trigger)
   versionCode: auto              # derived from versionName: major*10000 + minor*100 + patch + 1
   description: Sweep every relay on the Nostr network for the kinds a chat client depends on.
-  # icon: ./logo.png             # pakstr's default icon is used until one exists
+  # Launcher icon: pakstr picks up ./logo.png on its own. The adaptive icon
+  # shrinks it into Android's safe circle, so the ring around it is filled
+  # with the logo's own blue rather than the default white.
+  backgroundColor: "#0667FE"
   permissions: [INTERNET]
 
 build:

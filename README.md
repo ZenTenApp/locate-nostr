@@ -1,4 +1,4 @@
-# Nostr Locate
+# NostrBox Locate
 
 A relay search engine. It asks **every relay the Nostr network knows about** what it holds, for
 the kinds [`chat`](../chat) depends on — profile, follow list, DMs, both relay lists, and NIP-38

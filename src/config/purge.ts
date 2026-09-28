@@ -77,4 +77,4 @@ export const PURGE_CONFIRM_WORD = 'PURGE';
 
 /** Default `content` of the kind-5 request. Relays and other clients display
  *  it as the stated reason. */
-export const PURGE_DEFAULT_REASON = 'Requested by the author from Nostr Locate';
+export const PURGE_DEFAULT_REASON = 'Requested by the author from NostrBox Locate';
