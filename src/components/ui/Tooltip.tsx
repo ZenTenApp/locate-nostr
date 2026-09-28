@@ -11,7 +11,7 @@
  *
  * One layer serves the whole page; see `stores/tooltip-store.ts` for why.
  */
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { useTooltipStore } from '@/stores/tooltip-store';
 
@@ -51,6 +51,16 @@ export function TooltipLayer() {
       top: fitsBelow ? below : Math.max(MARGIN, anchor.top - box.height - GAP),
     });
   }, [anchor, content]);
+
+  // The anchor is a rectangle captured at hover time, so any scroll leaves the
+  // tooltip pointing at nothing. On touch this is also how a tapped tooltip
+  // goes away: no mouse ever leaves the cell to close it.
+  useEffect(() => {
+    if (anchor === null) return;
+    const hide = () => useTooltipStore.getState().hide();
+    document.addEventListener('scroll', hide, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', hide, { capture: true });
+  }, [anchor]);
 
   if (!content || !anchor) return null;
 

@@ -56,6 +56,12 @@ export const SPACING = {
   xxl: '32px',
 } as const;
 
+/** The one layout breakpoint: above it the page is a fixed-height table view,
+ *  below it a scrolling phone view. Tailwind's `md:` and the script-side media
+ *  query both read this, so the two can never disagree about which is which. */
+export const WIDE_MIN_WIDTH = '768px';
+export const WIDE_MEDIA_QUERY = `(min-width: ${WIDE_MIN_WIDTH})`;
+
 /** Corner radius scale. */
 export const RADIUS = {
   sm: '8px',

@@ -83,6 +83,10 @@ const SOURCE_CHOICES: { value: RelaySource; label: string; hint: string }[] = [
   },
 ];
 
+/** Buttons that share a row on a phone split it evenly; on a wide screen they
+ *  size to their labels. */
+const PHONE_FILL = 'flex-1 md:flex-none';
+
 /** Where an identity came from, said in the one line under the box. */
 const SOURCE_LABEL: Record<IdentitySource, string> = {
   text: 'pasted',
@@ -177,7 +181,7 @@ export function QueryPanel(props: QueryPanelProps) {
   return (
     <section className="border-b border-surface-border bg-surface-panel px-lg py-md">
       <div className="flex flex-wrap items-center gap-md">
-        <div className="min-w-[320px] flex-1">
+        <div className="w-full md:w-auto md:min-w-[320px] md:flex-1">
           <Input
             value={props.identityText}
             onChange={(event) => props.onIdentityText(event.target.value)}
@@ -186,9 +190,10 @@ export function QueryPanel(props: QueryPanelProps) {
           />
         </div>
 
-        <div className="flex items-center gap-xs">
+        <div className="flex w-full items-center gap-xs md:w-auto">
           <Button
             variant="secondary"
+            className={PHONE_FILL}
             onClick={() => void askExtension()}
             disabled={extensionBusy || props.running}
             {...tooltipHandlers({
@@ -204,6 +209,7 @@ export function QueryPanel(props: QueryPanelProps) {
           </Button>
           <Button
             variant="secondary"
+            className={PHONE_FILL}
             onClick={() => setKeyDialog('seed')}
             disabled={props.running}
             {...tooltipHandlers({
@@ -218,6 +224,7 @@ export function QueryPanel(props: QueryPanelProps) {
           </Button>
           <Button
             variant="secondary"
+            className={PHONE_FILL}
             onClick={() => setKeyDialog('ssh')}
             disabled={props.running}
             {...tooltipHandlers({
@@ -233,11 +240,15 @@ export function QueryPanel(props: QueryPanelProps) {
         </div>
 
         {props.running ? (
-          <Button variant="danger" onClick={props.onCancel}>
+          <Button variant="danger" className={PHONE_FILL} onClick={props.onCancel}>
             Stop
           </Button>
         ) : (
-          <Button onClick={props.onStart} disabled={blocked || props.breakdown.selected === 0}>
+          <Button
+            className={PHONE_FILL}
+            onClick={props.onStart}
+            disabled={blocked || props.breakdown.selected === 0}
+          >
             {blocked
               ? 'Enter an npub first'
               : `Check ${compactCount(props.breakdown.selected)} relays`}

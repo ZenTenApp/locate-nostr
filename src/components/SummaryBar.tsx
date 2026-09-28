@@ -96,7 +96,7 @@ export function SummaryBar({
 
   return (
     <section className="border-b border-surface-border bg-surface-base px-lg py-md">
-      <div className="flex flex-wrap items-end gap-xl">
+      <div className="grid grid-cols-3 gap-md md:flex md:flex-wrap md:items-end md:gap-xl">
         <Stat
           value={compactCount(totals.carrying)}
           label="relays with data"
@@ -134,7 +134,7 @@ export function SummaryBar({
           />
         )}
 
-        <div className="ml-auto text-right text-sm text-ink-muted">
+        <div className="col-span-full text-sm text-ink-muted md:ml-auto md:text-right">
           <StatusLine
             running={running}
             progress={progress}

@@ -7,12 +7,6 @@
     color-scheme: dark;
   }
 
-  html,
-  body,
-  #root {
-    height: 100dvh;
-  }
-
   body {
     @apply bg-surface-base text-ink-primary;
     font-family:
@@ -23,9 +17,9 @@
       sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
-    /* The result grid is the only scroll container that matters; a rubber-band
-       bounce on the page behind it makes a run in progress look like a
-       rendering fault. */
+    /* On a wide screen the result grid is the only scroll container, and on a
+       phone the page is; either way a rubber-band bounce past the end makes a
+       run in progress look like a rendering fault. */
     overscroll-behavior: none;
   }
 }
@@ -41,7 +35,8 @@
 
   /* Column widths in the result grid are driven by the kind list, which is
      data — see `KIND_SPECS`. Tailwind cannot generate a class per unknown
-     count, so the grid template is set inline and this only pins the row. */
+     count, so the grid template is set inline and this only pins the row.
+     Used under `md:` for the rows: below it a row is a card, not a table row. */
   .grid-row {
     display: grid;
     align-items: center;

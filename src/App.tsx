@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { WIDE_MEDIA_QUERY } from '@/config/theme';
 import { selectionBreakdown, selectRelays } from '@/services/discovery/directory';
 import type { RelayDescriptor } from '@/services/discovery/nip66';
 import { queryKeyFor } from '@/services/sweep/types';
@@ -18,7 +19,7 @@ import type { GridFilters } from '@/hooks/use-grid-rows';
 import { useSweepStore } from '@/stores/sweep-store';
 import { usePurgeStore } from '@/stores/purge-store';
 import { CacheBanner } from '@/components/CacheBanner';
-import { FilterBar } from '@/components/FilterBar';
+import { FilterBar, MatchCount } from '@/components/FilterBar';
 import { QueryPanel } from '@/components/QueryPanel';
 import { RelayDetail } from '@/components/RelayDetail';
 import { ResultGrid } from '@/components/ResultGrid';
@@ -26,6 +27,8 @@ import { gridStatusFor } from '@/components/grid-status';
 import { SummaryBar } from '@/components/SummaryBar';
 import { PurgeBar } from '@/components/purge/PurgeBar';
 import { PurgeDialog } from '@/components/purge/PurgeDialog';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { TooltipLayer } from '@/components/ui/Tooltip';
 
 /** Rows drawn per page. Enough to fill any screen twice over; the cap exists
@@ -44,8 +47,22 @@ export function App() {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [purgeOpen, setPurgeOpen] = useState(false);
+  /** The phone menu: filters, sort and purge, which have no room on the page. */
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const { loadDirectory, restoreCached } = store;
+
+  // The menu only exists on a phone. Widening the window past the breakpoint
+  // puts the filters back on the page, so the menu holding them goes away
+  // rather than lingering as an invisible modal with a live Escape handler.
+  useEffect(() => {
+    const wide = window.matchMedia(WIDE_MEDIA_QUERY);
+    const onChange = () => {
+      if (wide.matches) setMenuOpen(false);
+    };
+    wide.addEventListener('change', onChange);
+    return () => wide.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     void loadDirectory();
@@ -144,6 +161,27 @@ export function App() {
     void store.start();
   };
 
+  // One set of props for both places the bar appears: inline on a wide screen,
+  // in the menu on a phone. Each placement is its own mount; the breakpoint
+  // effect above keeps them from being on screen together.
+  const filterBar = (
+    <FilterBar
+      filters={filters}
+      onChange={(patch) => {
+        setFilters((current) => ({ ...current, ...patch }));
+        setLimit(PAGE_SIZE);
+      }}
+      matched={rows.length}
+      total={total}
+      hasBaseline={store.baseline.size > 0}
+      canPurge={store.author !== null && !purge.picking}
+      onPurgeMode={() => {
+        purge.setPicking(true);
+        setMenuOpen(false);
+      }}
+    />
+  );
+
   const selected = selectedUrl === null ? null : relays.find((relay) => relay.url === selectedUrl);
   const elapsedMs =
     store.startedAt !== null && store.finishedAt !== null
@@ -151,15 +189,30 @@ export function App() {
       : null;
 
   return (
-    <div className="flex h-screen flex-col bg-surface-base text-ink-primary">
-      <header className="flex items-baseline gap-md border-b border-surface-border px-lg py-md">
-        <h1 className="text-xl font-semibold">Locate</h1>
-        <p className="text-sm text-ink-muted">
+    // Wide screens pin the page to the viewport and scroll only the grid; a
+    // phone has no room for fixed panels above it, so the whole page scrolls.
+    <div className="flex min-h-screen flex-col bg-surface-base text-ink-primary md:h-screen">
+      {/* On a phone this is the title bar: pinned while the page scrolls under
+          it, with the menu that holds what the page has no room for. */}
+      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-md gap-y-xs border-b border-surface-border bg-surface-panel px-lg py-sm md:static md:items-baseline md:bg-surface-base md:py-md">
+        <h1 className="text-lg font-semibold md:text-xl">Nostr Locate</h1>
+        <p className="hidden text-sm text-ink-muted md:block">
           Find out which relays actually hold your data — or anyone&rsquo;s.
         </p>
         {store.directoryError !== null && (
-          <span className="ml-auto text-sm text-state-error">{store.directoryError}</span>
+          <span className="order-last w-full text-sm text-state-error md:order-none md:ml-auto md:w-auto">
+            {store.directoryError}
+          </span>
         )}
+        <Button
+          variant="ghost"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-haspopup="dialog"
+          className="-mr-sm ml-auto px-sm py-0 text-xl leading-none md:hidden"
+        >
+          ☰
+        </Button>
       </header>
 
       <QueryPanel
@@ -210,18 +263,20 @@ export function App() {
         />
       )}
 
-      <FilterBar
-        filters={filters}
-        onChange={(patch) => {
-          setFilters((current) => ({ ...current, ...patch }));
-          setLimit(PAGE_SIZE);
-        }}
-        matched={rows.length}
-        total={total}
-        hasBaseline={store.baseline.size > 0}
-        canPurge={store.author !== null && !purge.picking}
-        onPurgeMode={() => purge.setPicking(true)}
-      />
+      <div className="hidden md:block">{filterBar}</div>
+      {/* The phone's stand-in for the filter bar: what the filters are hiding
+          stays on the page, and the way to change them is one tap away. */}
+      <div className="flex items-center justify-between gap-sm border-b border-surface-border bg-surface-panel px-lg py-xs text-sm text-ink-muted md:hidden">
+        <MatchCount matched={rows.length} total={total} />
+        <Button variant="ghost" className="px-sm py-xs text-sm" onClick={() => setMenuOpen(true)}>
+          Filter &amp; sort
+        </Button>
+      </div>
+      {menuOpen && (
+        <Modal title="Filter & sort" placement="side" onClose={() => setMenuOpen(false)}>
+          <div className="-mx-lg">{filterBar}</div>
+        </Modal>
+      )}
 
       {/* Between the filters and the grid, because it describes the grid: the
           ticks are on those rows, and "all except ticked" is measured against

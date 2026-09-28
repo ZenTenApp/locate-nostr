@@ -1,10 +1,11 @@
 import type { Config } from 'tailwindcss';
-import { COLORS, SPACING, RADIUS, FONT_SIZE } from './src/config/theme';
+import { COLORS, SPACING, RADIUS, FONT_SIZE, WIDE_MIN_WIDTH } from './src/config/theme';
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      screens: { md: WIDE_MIN_WIDTH },
       colors: {
         surface: COLORS.surface,
         ink: COLORS.ink,

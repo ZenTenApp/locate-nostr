@@ -15,6 +15,16 @@ const SORT_LABELS: Record<SortKey, string> = {
   change: 'changed first',
 };
 
+/** How much of the sweep the filters let through. Shared with the phone's strip
+ *  above the cards, which stands in for this bar when it is tucked in a menu. */
+export function MatchCount({ matched, total }: { matched: number; total: number }) {
+  return (
+    <span>
+      showing {matched} of {total} relays
+    </span>
+  );
+}
+
 export function FilterBar({
   filters,
   onChange,
@@ -37,7 +47,7 @@ export function FilterBar({
 }) {
   return (
     <section className="flex flex-wrap items-center gap-md border-b border-surface-border bg-surface-panel px-lg py-sm">
-      <div className="w-64">
+      <div className="w-full md:w-64">
         <Input
           value={filters.text}
           onChange={(event) => onChange({ text: event.target.value })}
@@ -46,7 +56,7 @@ export function FilterBar({
         />
       </div>
 
-      <div className="w-44">
+      <div className="w-full md:w-44">
         <Select
           value={filters.kind ?? ''}
           onChange={(event) =>
@@ -63,7 +73,7 @@ export function FilterBar({
         </Select>
       </div>
 
-      <div className="w-48">
+      <div className="w-full md:w-48">
         <Select
           value={filters.sort}
           onChange={(event) => onChange({ sort: event.target.value as SortKey })}
@@ -113,7 +123,7 @@ export function FilterBar({
       )}
 
       <span className="ml-auto text-sm text-ink-muted">
-        showing {matched} of {total} relays
+        <MatchCount matched={matched} total={total} />
       </span>
       {canPurge && (
         <Button variant="ghost" className="px-sm py-0 text-state-error" onClick={onPurgeMode}>

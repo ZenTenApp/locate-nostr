@@ -46,7 +46,7 @@ function KindLine({
 
   return (
     <div className="border-b border-surface-border/60 py-sm">
-      <div className="flex items-baseline gap-sm">
+      <div className="flex flex-wrap items-baseline gap-sm">
         {/* Plain name over protocol name: "messages" is what was asked for,
             "kind 4 · NIP-04" is what it takes to search the spec, report a
             relay bug, or match this against another client's output. Stacked
@@ -126,8 +126,10 @@ export function RelayDetail({
   const [rawKind, setRawKind] = useState<KindSpec | null>(null);
 
   return (
-    <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-surface-border bg-surface-panel">
-      <header className="flex items-start justify-between gap-sm border-b border-surface-border p-lg">
+    // A side panel beside the grid on a wide screen; on a phone there is no
+    // "beside", so it covers the page until closed.
+    <aside className="fixed inset-0 z-40 flex flex-col overflow-y-auto overscroll-contain bg-surface-panel md:static md:w-[380px] md:shrink-0 md:border-l md:border-surface-border">
+      <header className="sticky top-0 z-10 flex items-start justify-between gap-sm border-b border-surface-border bg-surface-panel p-lg">
         <div className="min-w-0">
           {/* The endpoint in full — scheme, port and path included, since
               `wss://host/inbox` and `wss://host` are different relays that a

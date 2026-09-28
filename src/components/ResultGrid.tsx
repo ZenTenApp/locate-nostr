@@ -17,9 +17,14 @@
  * delivered at all while a document is hidden, which is a background tab, a
  * screenshotting harness, and any browser that throttles one — and a paging
  * mechanism that silently stops in those cases is the dead end this replaced.
+ *
+ * Below `md` a row is a card rather than a table row: seven kind columns do not
+ * fit a phone, and a table scrolled sideways hides the relay name the moment
+ * the counts come into view. The card is the same DOM, regrouped by wrappers
+ * that `md:contents` dissolves back into plain grid cells on a wide screen.
  */
 import { memo, useEffect, useMemo, useRef } from 'react';
-import type { UIEvent } from 'react';
+import type { ReactNode } from 'react';
 
 import { KIND_SPECS, kindTag } from '@/config/kinds';
 import type { KindSpec } from '@/config/kinds';
@@ -166,7 +171,7 @@ function RelayLabel({ row }: { row: GridRow }) {
   const failed = result?.status === 'unreachable' || result?.status === 'error';
 
   return (
-    <div className="flex min-w-0 items-center gap-sm">
+    <div className="flex min-w-0 flex-1 items-center gap-sm">
       <span
         className={`truncate font-mono text-sm ${failed ? 'text-ink-muted line-through' : 'text-ink-primary'}`}
         // The full endpoint, since the column shows the host only: two relays
@@ -190,7 +195,9 @@ function RelayLabel({ row }: { row: GridRow }) {
           that reasoning had to be remembered in two files. */}
       <RelayLink
         url={relay.url}
-        className="shrink-0 text-xs text-ink-muted opacity-0 transition group-hover:opacity-100"
+        // Hover-revealed, so absent on touch: an invisible link is a mis-tap
+        // waiting to happen, and the detail panel links the relay anyway.
+        className="hidden shrink-0 text-xs text-ink-muted opacity-0 transition group-hover:opacity-100 md:inline"
       >
         ↗
       </RelayLink>
@@ -223,6 +230,12 @@ function RelayLabel({ row }: { row: GridRow }) {
  * next click looks like it will tick everything when it will in fact untick
  * what is there.
  */
+/** The select-all wording, shared by the checkbox's accessible name and the
+ *  visible label the phone strip gives it. */
+function tickAllText(all: boolean, count: number): string {
+  return `${all ? 'Untick' : 'Tick'} all ${compactCount(count)} relays these filters match`;
+}
+
 function HeaderTickBox({
   all,
   some,
@@ -245,13 +258,23 @@ function HeaderTickBox({
       type="checkbox"
       checked={all}
       onChange={onChange}
-      aria-label={
-        all
-          ? `Untick all ${count} relays these filters match`
-          : `Tick all ${count} relays these filters match`
-      }
+      aria-label={tickAllText(all, count)}
       className="h-4 w-4 shrink-0 self-center accent-state-error"
     />
+  );
+}
+
+/** A cell with its column name above it, for the card layout where there is no
+ *  header row to carry it. On a wide screen the wrapper dissolves and the name
+ *  hides, leaving the bare cell in the grid. */
+function CardCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 md:contents">
+      <span className="truncate text-center text-micro uppercase tracking-wide text-ink-muted md:hidden">
+        {label}
+      </span>
+      {children}
+    </div>
   );
 }
 
@@ -293,43 +316,50 @@ const Row = memo(function Row({
         }
       }}
       style={{ gridTemplateColumns: template }}
-      className={`grid-row group w-full cursor-pointer gap-sm border-b border-surface-border/60 px-md py-1.5 text-left transition hover:bg-surface-card focus:outline focus:outline-1 focus:outline-brand-primary ${
+      className={`group flex w-full cursor-pointer flex-col gap-xs border-b border-surface-border/60 px-md py-sm text-left md:grid-row md:gap-sm md:py-1.5 transition hover:bg-surface-card focus:outline focus:outline-1 focus:outline-brand-primary ${
         selected ? 'bg-surface-card' : ''
       }`}
     >
-      {picking && (
-        // Its own click handler and its own stopPropagation: ticking a relay
-        // for deletion and opening its detail panel are different intentions,
-        // and one gesture must not do both.
-        <input
-          type="checkbox"
-          checked={picked}
-          onClick={(event) => event.stopPropagation()}
-          onChange={() => onTogglePick(row.relay.url)}
-          aria-label={`Tick ${row.relay.url}`}
-          className="h-4 w-4 shrink-0 self-center accent-state-error"
-        />
-      )}
-      <RelayLabel row={row} />
-      <span className="text-right font-mono text-xs text-ink-muted">
-        {row.result?.connectMs === null || row.result === undefined
-          ? ''
-          : `${row.result.connectMs}ms`}
-      </span>
-      {kinds.map((spec) => (
-        <CountCell
-          key={spec.kind}
-          spec={spec}
-          result={row.result?.kinds[spec.kind]}
-          delta={deltas.get(spec.kind)}
-          pending={pending}
-        />
-      ))}
-      <span className="text-right font-mono text-sm text-ink-secondary">
-        {row.result?.total === null || row.result === undefined
-          ? ''
-          : compactCount(row.result.total)}
-      </span>
+      <div className="flex min-w-0 items-center gap-sm md:contents">
+        {picking && (
+          // Its own click handler and its own stopPropagation: ticking a relay
+          // for deletion and opening its detail panel are different intentions,
+          // and one gesture must not do both.
+          <input
+            type="checkbox"
+            checked={picked}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onTogglePick(row.relay.url)}
+            aria-label={`Tick ${row.relay.url}`}
+            className="h-4 w-4 shrink-0 self-center accent-state-error"
+          />
+        )}
+        <RelayLabel row={row} />
+        <span className="shrink-0 text-right font-mono text-xs text-ink-muted">
+          {row.result?.connectMs === null || row.result === undefined
+            ? ''
+            : `${row.result.connectMs}ms`}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-xs md:contents">
+        {kinds.map((spec) => (
+          <CardCell key={spec.kind} label={spec.label}>
+            <CountCell
+              spec={spec}
+              result={row.result?.kinds[spec.kind]}
+              delta={deltas.get(spec.kind)}
+              pending={pending}
+            />
+          </CardCell>
+        ))}
+        <CardCell label="total">
+          <span className="py-0.5 text-center font-mono text-sm text-ink-secondary md:py-0 md:text-right">
+            {row.result?.total === null || row.result === undefined
+              ? ''
+              : compactCount(row.result.total)}
+          </span>
+        </CardCell>
+      </div>
     </div>
   );
 });
@@ -431,28 +461,53 @@ export function ResultGrid({
     requested.current = false;
   }, [limit, rows.length]);
 
-  const onScroll = (event: UIEvent<HTMLDivElement>) => {
-    if (!more || requested.current) return;
-    const pane = event.currentTarget;
-    if (pane.scrollHeight - pane.scrollTop - pane.clientHeight > LOAD_AHEAD_PX) return;
-    requested.current = true;
-    onShowMore();
-  };
+  /**
+   * Measured off a marker at the end of the drawn rows, not off the pane's own
+   * scroll offsets: on a wide screen the pane scrolls, on a phone the page
+   * does, and a capture listener on the document hears both. The marker's
+   * distance below the viewport is the same question either way. Checked once
+   * on attach and after every page too: a page shorter than the screen fires
+   * no scroll at all, and paging would stall until the user nudged it.
+   */
+  const endMarker = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!more) return;
+    const onScroll = () => {
+      if (requested.current || endMarker.current === null) return;
+      const below = endMarker.current.getBoundingClientRect().top - window.innerHeight;
+      if (below > LOAD_AHEAD_PX) return;
+      requested.current = true;
+      onShowMore();
+    };
+    onScroll();
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', onScroll, { capture: true });
+  }, [more, onShowMore, limit, rows.length]);
+
+  // One set of props for both places select-all is drawn: the header row on a
+  // wide screen, its own strip above the cards on a phone. Only one is shown.
+  const tickAll = picking && (
+    <HeaderTickBox
+      all={allPicked}
+      some={pickedHere > 0 && !allPicked}
+      count={matchedUrls.length}
+      onChange={() => (allPicked ? onUnpickMany(matchedUrls) : onPickMany(matchedUrls))}
+    />
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {picking && (
+        <label className="flex items-center gap-sm border-b border-surface-border bg-surface-panel px-md py-sm text-sm text-ink-secondary md:hidden">
+          {tickAll}
+          {tickAllText(allPicked, matchedUrls.length)}
+        </label>
+      )}
       <div
         style={{ gridTemplateColumns: template }}
-        className="grid-row sticky top-0 z-10 gap-sm border-b border-surface-border bg-surface-panel px-md py-sm text-xs uppercase tracking-wide text-ink-muted"
+        className="sticky top-0 z-10 hidden gap-sm border-b border-surface-border bg-surface-panel px-md py-sm text-xs uppercase tracking-wide text-ink-muted md:grid-row"
       >
-        {picking && (
-          <HeaderTickBox
-            all={allPicked}
-            some={pickedHere > 0 && !allPicked}
-            count={matchedUrls.length}
-            onChange={() => (allPicked ? onUnpickMany(matchedUrls) : onPickMany(matchedUrls))}
-          />
-        )}
+        {tickAll}
         <span>relay</span>
         <span
           className="text-right"
@@ -486,7 +541,7 @@ export function ResultGrid({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto" onScroll={onScroll}>
+      <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
         {shown.map((row) => (
           <Row
             key={row.relay.url}
@@ -500,6 +555,7 @@ export function ResultGrid({
             onTogglePick={onTogglePick}
           />
         ))}
+        <div ref={endMarker} aria-hidden />
 
         {rows.length === 0 && (
           <EmptyState
