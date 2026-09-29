@@ -230,7 +230,7 @@ export function QueryPanel(props: QueryPanelProps) {
             {...tooltipHandlers({
               title: 'Use your SSH key',
               lines: [
-                'Works out your public key from an encrypted OpenSSH Ed25519 key — the same identity the chat app signs in with.',
+                'Works out your Nostr public key from an OpenSSH Ed25519 key.',
                 'The key is used once, in a background worker, then erased. Nothing is stored and nothing is signed.',
               ],
             })}

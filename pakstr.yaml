@@ -10,7 +10,7 @@ app:
   appName: NostrBox Locate
   versionName: auto              # from the vX.Y.Z tag on HEAD (the release workflow's trigger)
   versionCode: auto              # derived from versionName: major*10000 + minor*100 + patch + 1
-  description: Sweep every relay on the Nostr network for the kinds a chat client depends on.
+  description: Check every relay on the Nostr network for your profile, follows, messages and relay lists, and purge what you want gone.
   # Launcher icon: pakstr picks up ./logo.png on its own. The adaptive icon
   # shrinks it into Android's safe circle, so the ring around it is filled
   # with the logo's own blue rather than the default white.

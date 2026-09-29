@@ -1,8 +1,8 @@
 # NostrBox Locate
 
-A relay search engine. It asks **every relay the Nostr network knows about** what it holds, for
-the kinds [`chat`](../chat) depends on — profile, follow list, DMs, both relay lists, and NIP-38
-status — and reports the counts relay by relay.
+A relay search engine. It asks **every relay the Nostr network knows about** what it holds for one
+identity: profile, follow list, DMs, both relay lists, NIP-38 status and every other kind, and
+reports the counts relay by relay.
 
 It answers one question: **where did this identity's data actually land?** For every relay on the
 network it reports how much of each kind that identity has there, and how old the newest copy is.
