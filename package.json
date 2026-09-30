@@ -1,7 +1,7 @@
 {
   "name": "nostr-locate",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "description": "Relay search engine: checks every relay on the Nostr network for one identity's events",
   "scripts": {
