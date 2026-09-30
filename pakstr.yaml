@@ -6,7 +6,7 @@
 # Keep PAKSTR_NSEC in .env locally (gitignored) or in CI secrets, never here.
 
 app:
-  appId: locate.nostr.box
+  appId: box.nostr.locate
   appName: NostrBox Locate
   versionName: auto              # from the vX.Y.Z tag on HEAD (the release workflow's trigger)
   versionCode: auto              # derived from versionName: major*10000 + minor*100 + patch + 1
