@@ -1,0 +1,87 @@
+name: Release
+
+# release-please keeps a Release PR open that bumps package.json and
+# CHANGELOG.md from the Conventional Commits on main. Merging it tags vX.Y.Z
+# and creates the GitHub Release, and the publish job below ships that tag to
+# Zapstore. Publishing lives here rather than on a tag trigger because tags
+# pushed with GITHUB_TOKEN start no other workflow.
+
+on:
+  push:
+    branches: [main]
+  # Re-runs the publish for an existing tag, e.g. after a failed upload.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, e.g. v0.4.0
+        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Labels the Release PR ("autorelease: pending"), which goes through the
+      # issues API.
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+
+  check:
+    needs: release-please
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
+
+  # Builds the APK, signs it with a key derived from PAKSTR_NSEC and publishes
+  # it to Zapstore. pakstr reads the version from the tag on HEAD, so the
+  # checkout must be the tag itself.
+  publish:
+    needs: [release-please, check]
+    if: ${{ !cancelled() && needs.check.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # pakstr packages ./dist as is; it never runs the web build itself.
+      - run: npm run build
+      # The GitHub Release body is this version's CHANGELOG section. Zapstore
+      # shows it as the release notes; zapstore.yaml only points at it here so
+      # a local `pakstr run` does not need the file.
+      - name: Release notes from the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --json body --jq .body > RELEASE_NOTES.md
+          grep -q '^release_notes:' zapstore.yaml || echo "release_notes: ./RELEASE_NOTES.md" >> zapstore.yaml
+      - name: Build, sign and publish APK
+        env:
+          PAKSTR_NSEC: ${{ secrets.PAKSTR_NSEC }}
+        run: npx pakstr run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apk
+          path: build/*.apk
+          if-no-files-found: ignore
