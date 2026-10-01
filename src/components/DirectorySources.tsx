@@ -55,7 +55,7 @@ export function DirectorySources({
   const staleHours = Math.round(DISCOVERY_STALE_AFTER_S / 3600);
 
   return (
-    <div className="w-[420px] rounded-lg border border-surface-border bg-surface-card p-lg shadow-2xl">
+    <div className="w-full rounded-lg border border-surface-border bg-surface-card p-lg shadow-2xl md:w-[420px]">
       <h3 className="text-base font-semibold text-ink-primary">Where these relays come from</h3>
       <p className="mt-xs text-sm text-ink-secondary">
         Nobody keeps an official list of Nostr relays. Volunteers run{' '}

@@ -260,7 +260,7 @@ export function QueryPanel(props: QueryPanelProps) {
         </Button>
       </div>
 
-      <div className="mt-sm flex flex-wrap items-center gap-sm text-sm text-ink-muted">
+      <div className="relative mt-sm flex flex-wrap items-center gap-sm text-sm text-ink-muted">
         {props.identityError !== null && (
           <span className="text-state-error">{props.identityError}</span>
         )}
@@ -283,8 +283,10 @@ export function QueryPanel(props: QueryPanelProps) {
         )}
         <span aria-hidden>·</span>
         {/* The relay count is the number every result is read against, so its
-            provenance is one click away rather than buried in a README. */}
-        <span className="relative">
+            provenance is one click away rather than buried in a README. On a
+            phone the link sits mid-line, so the panel anchors to the whole
+            row instead and takes its width; from md up it hangs off the link. */}
+        <span className="md:relative">
           <button
             type="button"
             onClick={() => setSourcesOpen((open) => !open)}
@@ -297,7 +299,7 @@ export function QueryPanel(props: QueryPanelProps) {
             {directoryLabel()}
           </button>
           {sourcesOpen && (
-            <span className="absolute left-0 top-6 z-40 block">
+            <span className="absolute inset-x-0 top-full z-40 mt-xs block md:inset-x-auto md:left-0 md:top-6 md:mt-0">
               <DirectorySources
                 directory={props.directory}
                 breakdown={props.breakdown}
