@@ -7,7 +7,7 @@
 
 app:
   appId: box.nostr.locate
-  appName: NostrBox Locate
+  appName: Nostr.Box Locate
   versionName: auto              # from the vX.Y.Z tag on HEAD (the release workflow's trigger)
   versionCode: auto              # derived from versionName: major*10000 + minor*100 + patch + 1
   description: Check every relay on the Nostr network for your profile, follows, messages and relay lists, and purge what you want gone.

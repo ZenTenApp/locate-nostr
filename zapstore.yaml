@@ -4,7 +4,7 @@
 repository: https://github.com/ZenTenApp/locate-nostr
 pubkey: npub102nrvyzuawmqjq04trk5xvqvva97z6nj4jjapk9js4z8hfgm7rfqfdlgj0  # must match PAKSTR_NSEC
 
-name: NostrBox Locate
+name: Nostr.Box Locate
 summary: Find which Nostr relays hold your events, and purge them.
 icon: ./logo.png
 tags: [nostr, relays, search]

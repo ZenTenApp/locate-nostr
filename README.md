@@ -1,4 +1,4 @@
-# NostrBox Locate
+# Nostr.Box Locate
 
 A relay search engine. It asks **every relay the Nostr network knows about** what it holds for one
 identity: profile, follow list, DMs, both relay lists, NIP-38 status and every other kind, and

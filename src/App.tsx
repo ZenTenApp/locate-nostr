@@ -198,7 +198,7 @@ export function App() {
         <h1 className="flex items-center gap-sm self-center text-lg font-semibold md:text-xl">
           {/* Decorative: the name beside it already says what the app is. */}
           <img src="/favicon.png" alt="" className="h-6 w-6 rounded-sm" />
-          NostrBox Locate
+          Nostr.Box Locate
         </h1>
         <p className="hidden text-sm text-ink-muted md:block">
           Find out which relays actually hold your data — or anyone&rsquo;s.
