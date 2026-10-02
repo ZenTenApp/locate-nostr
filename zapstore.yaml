@@ -2,6 +2,8 @@
 # to confirm the npub publishing releases is allowed to speak for it.
 
 repository: https://github.com/ZenTenApp/locate-nostr
+website: https://locate.nostr.box
+license: MIT
 pubkey: npub102nrvyzuawmqjq04trk5xvqvva97z6nj4jjapk9js4z8hfgm7rfqfdlgj0  # must match PAKSTR_NSEC
 
 name: Nostr.Box Locate
