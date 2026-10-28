@@ -389,7 +389,7 @@ export function QueryPanel(props: QueryPanelProps) {
               className="mt-xs"
               value={props.pastedRelays}
               onChange={(event) => props.onChange({ pastedRelays: event.target.value })}
-              placeholder={'wss://dm1.zentext.me\nwss://dm2.nostr.box'}
+              placeholder={'wss://dm1.zentext.me\nwss://dm2.nostr.box\nwss://dm3.npub.cx'}
             />
             <span className="mt-xs text-xs text-ink-muted">
               One per line. If the trackers already know a relay it keeps its details; the rest are
